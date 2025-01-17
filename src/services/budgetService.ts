@@ -1,6 +1,80 @@
 import { supabase } from './supabase';
-import { Budget, BudgetExpense, BudgetIncome, ExpenseCategory } from '../models/Budget';
+import { Budget, BudgetExpense, BudgetIncome, ExpenseCategory, BudgetCategory } from '../models/Budget';
 import { getDatabaseMonth } from '../utils/dateUtils';
+import { Transaction } from '../models/Transaction';
+
+// Helper function to map transaction data
+const mapTransaction = (data: any): Transaction => ({
+  id: data.id,
+  hashId: data.hash_id,
+  amount: data.amount,
+  date: new Date(data.date),
+  description: data.description,
+  expenseId: data.expense_id,
+  incomeId: data.income_id,
+  createdAt: new Date(data.created_at),
+  updatedAt: data.updated_at ? new Date(data.updated_at) : undefined
+});
+
+// Helper function to map expense category
+const mapExpenseCategory = (data: any): ExpenseCategory => ({
+  id: data.id,
+  name: data.name,
+  color: data.color,
+  userId: data.user_id,
+  createdAt: new Date(data.created_at)
+});
+
+// Helper function to map budget category
+const mapBudgetCategory = (data: any): BudgetCategory => ({
+  id: data.id,
+  budgetId: data.budget_id,
+  category: mapExpenseCategory(data.category),
+  createdAt: new Date(data.created_at),
+  updatedAt: new Date(data.updated_at),
+  sequenceNumber: data.sequence_number
+});
+
+// Helper function to map expense with transactions
+const mapExpense = (data: any): BudgetExpense => ({
+  id: data.id,
+  budgetId: data.budget_id,
+  categoryId: data.category_id,
+  name: data.name,
+  amount: data.amount,
+  dueDate: data.due_date ? new Date(data.due_date) : null,
+  fundId: data.fund_id,
+  createdAt: new Date(data.created_at),
+  updatedAt: new Date(data.updated_at),
+  sequenceNumber: data.sequence_number,
+  transactions: data.transactions ? data.transactions.map(mapTransaction) : []
+});
+
+// Helper function to map income with transactions
+const mapIncome = (data: any): BudgetIncome => ({
+  id: data.id,
+  budgetId: data.budget_id,
+  name: data.name,
+  amount: data.amount,
+  frequency: data.frequency,
+  expectedDate: new Date(data.expected_date),
+  createdAt: new Date(data.created_at),
+  updatedAt: new Date(data.updated_at),
+  transactions: data.transactions ? data.transactions.map(mapTransaction) : []
+});
+
+// Helper function to map entire budget
+const mapBudget = (data: any): Budget => ({
+  id: data.id,
+  month: data.month,
+  year: data.year,
+  userId: data.user_id,
+  createdAt: new Date(data.created_at),
+  updatedAt: new Date(data.updated_at),
+  categories: data.categories ? data.categories.map(mapBudgetCategory) : [],
+  expenses: data.expenses ? data.expenses.map(mapExpense) : [],
+  incomes: data.incomes ? data.incomes.map(mapIncome) : []
+});
 
 // Get budget by month and year
 export const getBudgetByMonthAndYear = async (month: number, year: number, userId: string): Promise<Budget | null> => {
@@ -9,40 +83,16 @@ export const getBudgetByMonthAndYear = async (month: number, year: number, userI
     .select(`
       *,
       categories:budget_categories(
-        id,
-        budgetId:budget_id,
-        category:expense_categories!inner(
-          id,
-          name,
-          userId:user_id,
-          createdAt:created_at,
-          color
-        ),
-        createdAt:created_at,
-        updatedAt:updated_at,
-        sequenceNumber:sequence_number
+        *,
+        category:expense_categories!inner(*)
       ),
       expenses:budget_expenses(
-        id,
-        name,
-        amount,
-        categoryId:category_id,
-        budgetId:budget_id,
-        dueDate:due_date,
-        fundId:fund_id,
-        createdAt:created_at,
-        updatedAt:updated_at,
-        sequenceNumber:sequence_number
+        *,
+        transactions(*)
       ),
       incomes:budget_incomes(
-        id,
-        name,
-        amount,
-        budgetId:budget_id,
-        frequency,
-        expectedDate:expected_date,
-        createdAt:created_at,
-        updatedAt:updated_at
+        *,
+        transactions(*)
       )
     `)
     .eq('month', month)
@@ -52,8 +102,8 @@ export const getBudgetByMonthAndYear = async (month: number, year: number, userI
 
   if (error?.details?.includes('The result contains 0 rows')) return null;
   if (error) throw error;
-  console.log('Budget by month and year', data);
-  return data;
+
+  return data ? mapBudget(data) : null;
 };
 
 // Get the most recent budget before the given month/year
@@ -242,4 +292,57 @@ export const deleteBudget = async (id: string): Promise<void> => {
 export const getCurrentBudget = async (userId: string): Promise<Budget | null> => {
   const currentDate = new Date();
   return await getBudgetByMonthAndYear(getDatabaseMonth(currentDate.getMonth()), currentDate.getFullYear(), userId);
+};
+
+interface BudgetPeriod {
+  month: number;
+  year: number;
+}
+
+interface BudgetCheckResult {
+  month: number;
+  year: number;
+  exists: boolean;
+  budgetId?: string;
+}
+
+/**
+ * Checks if budgets exist for the given months and years
+ * @param periods Array of objects containing month and year to check
+ * @param userId The user ID to check budgets for
+ * @returns Array of results indicating if each budget exists
+ */
+export const checkBudgetsExist = async (
+  periods: BudgetPeriod[],
+  userId: string
+): Promise<BudgetCheckResult[]> => {
+  try {
+    // Create a query that checks each period individually
+    const { data, error } = await supabase
+      .from('budgets')
+      .select('id, month, year')
+      .eq('user_id', userId)
+      .in('month', periods.map(p => p.month))
+      .in('year', periods.map(p => p.year));
+
+    if (error) throw error;
+
+    // Map each period to a result, checking if it exists in the returned data
+    return periods.map(period => {
+      const existingBudget = data?.find(budget => 
+        budget.month === period.month && 
+        budget.year === period.year
+      );
+
+      return {
+        month: period.month,
+        year: period.year,
+        exists: !!existingBudget,
+        budgetId: existingBudget?.id
+      };
+    });
+  } catch (error) {
+    console.error('Error checking budgets:', error);
+    throw error;
+  }
 };

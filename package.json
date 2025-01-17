@@ -15,6 +15,7 @@
     "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^13.5.0",
     "date-fns": "^4.1.0",
+    "material-ui-confirm": "^3.0.16",
     "notistack": "^3.0.1",
     "object-hash": "^3.0.0",
     "papaparse": "^5.4.1",
@@ -28,7 +29,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy:dev": "npm run build && firebase deploy --only hosting -P dev",
+    "deploy:prod": "npm run build && firebase deploy --only hosting -P prod",
+    "build:dev": "env-cmd -f .env.development npm run build",
+    "build:prod": "env-cmd -f .env.production npm run build"
   },
   "eslintConfig": {
     "extends": [

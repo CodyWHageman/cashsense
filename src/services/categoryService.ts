@@ -1,6 +1,24 @@
 import { supabase } from './supabase';
 import { BudgetCategory, ExpenseCategory } from '../models/Budget';
 
+// Helper functions to map database fields to camelCase
+const mapExpenseCategory = (data: any): ExpenseCategory => ({
+  id: data.id,
+  name: data.name,
+  color: data.color,
+  userId: data.user_id,
+  createdAt: data.created_at
+});
+
+const mapBudgetCategory = (data: any): BudgetCategory => ({
+  id: data.id,
+  budgetId: data.budget_id,
+  category: mapExpenseCategory(data.expense_category),
+  createdAt: data.created_at,
+  updatedAt: data.updated_at,
+  sequenceNumber: data.sequence_number
+});
+
 // Create a new category and associate it with a budget
 export const createCategory = async (
   category: Omit<ExpenseCategory, 'id'>,
@@ -32,27 +50,14 @@ export const createCategory = async (
       sequence_number: sequenceNumber
     }])
     .select(`
-      id,
-      budgetId:budget_id,
-      category:expense_categories!inner(
-        id,
-        name,
-        userId:user_id,
-        createdAt:created_at,
-        color
-      ),
-      createdAt:created_at,
-      updatedAt:updated_at,
-      sequenceNumber:sequence_number
+      *,
+      expense_category: expense_categories!inner(*)
     `)
     .single();
 
   if (associationError) throw associationError;
   
-  return {
-    ...associationData,
-    category: associationData.category[0] // Convert array to single object
-  };
+  return mapBudgetCategory(associationData);
 };
 
 // Update a category
@@ -72,7 +77,7 @@ export const updateExpenseCategory = async (
     .single();
 
   if (error) throw error;
-  return data;
+  return mapExpenseCategory(data);
 };
 
 // Delete a category

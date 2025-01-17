@@ -1,6 +1,6 @@
 {
   "short_name": "CashSense",
-  "name": "Budget Tracking Application",
+  "name": "CashSense - Budget Tracking Application",
   "icons": [
     {
       "src": "favicon.ico",
@@ -10,6 +10,6 @@
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#000000",
+  "theme_color": "#62d2a2",
   "background_color": "#ffffff"
 } 

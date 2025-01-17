@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Box, 
   Typography, 
@@ -7,47 +7,64 @@ import {
   ListItem, 
   ListItemText,
   Button,
-  LinearProgress
+  LinearProgress,
+  Paper,
+  Divider
 } from '@mui/material';
-import { ArrowBack, Delete } from '@mui/icons-material';
+import { ArrowBack, Delete, AccountBalance } from '@mui/icons-material';
 import { Transaction } from '../models/Transaction';
 import { BudgetExpense, ExpenseCategory } from '../models/Budget';
 import { createTransaction, deleteTransaction } from '../services/transactionService';
+import { updateExpense } from '../services/expenseService';
+import { createFundTransaction } from '../services/fundService';
+import TransactionDialog from './TransactionDialog';
+import FundSelector from './FundSelector';
+import { useAuth } from '../contexts/AuthContext';
 
 interface ExpenseDetailProps {
   expense: BudgetExpense;
-  transactions: Transaction[];
   category?: ExpenseCategory;
   onClose: () => void;
   onDeleteTransaction: (transactionId: string) => void;
+  onExpenseUpdate: (updatedExpense: BudgetExpense) => void;
 }
 
-function ExpenseDetail({ 
+const ExpenseDetail: React.FC<ExpenseDetailProps> = ({ 
   expense, 
-  transactions = [], 
   category,
   onClose,
-  onDeleteTransaction
-}: ExpenseDetailProps) {
-  const totalSpent = transactions.reduce((sum, t) => sum + t.amount, 0);
+  onDeleteTransaction,
+  onExpenseUpdate
+}) => {
+  const [transactionDialogOpen, setTransactionDialogOpen] = useState(false);
+  const { user } = useAuth();
+
+  const totalSpent = (expense.transactions || []).reduce((sum, t) => sum + t.amount, 0);
   const remaining = expense.amount - totalSpent;
   const percentageSpent = expense.amount > 0 ? (totalSpent / expense.amount) * 100 : 0;
 
-  const handleAddTransaction = async () => {
+  const handleAddTransaction = async (transaction: Transaction) => {
     try {
-      const transaction = await createTransaction({
-        date: new Date(),
-        description: expense.name,
-        amount: remaining > 0 ? remaining : 0,
-        account: category?.name || 'default',
+      const newTransaction = await createTransaction({
+        ...transaction,
         expenseId: expense.id,
         createdAt: new Date()
       });
-      
-      // Refresh the transactions list
-      window.location.reload();
+
+      // If the expense has a fund assigned, create a fund transaction as a deposit
+      if (expense.fundId && newTransaction.id) {
+        await createFundTransaction(
+          expense.fundId,
+          newTransaction.id,
+          'deposit',
+          false
+        );
+      }
+
+      onDeleteTransaction(newTransaction.id || ''); // This will trigger a refresh
+      setTransactionDialogOpen(false);
     } catch (error) {
-      console.error('Error creating transaction:', error);
+      console.error('Error adding transaction:', error);
     }
   };
 
@@ -60,116 +77,132 @@ function ExpenseDetail({
     }
   };
 
+  const handleFundChange = async (fundId: string | null) => {
+    try {
+      const updatedExpense = await updateExpense(expense.id, { ...expense, fundId });
+      onExpenseUpdate(updatedExpense);
+    } catch (error) {
+      console.error('Error updating expense fund:', error);
+    }
+  };
+
   return (
     <Box>
-      {/* Header */}
-      <Box sx={{ 
-        display: 'flex', 
-        alignItems: 'center',
-        mb: 3
-      }}>
-        <IconButton onClick={onClose} sx={{ mr: 2 }}>
+      <Box display="flex" alignItems="center" mb={2}>
+        <IconButton onClick={onClose}>
           <ArrowBack />
         </IconButton>
-        <Typography variant="h6">
+        <Typography variant="h6" ml={1}>
           {expense.name}
         </Typography>
       </Box>
 
-      {/* Progress */}
-      <Box sx={{ mb: 4 }}>
-        <Box sx={{ 
-          display: 'flex', 
-          justifyContent: 'space-between',
-          mb: 1
-        }}>
-          <Typography variant="body2" color="text.secondary">
-            Spent: ${totalSpent.toFixed(2)}
+      <Paper sx={{ p: 2, mb: 2 }}>
+        <Box mb={2}>
+          <Typography variant="subtitle2" color="text.secondary">
+            Amount
           </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Remaining: ${remaining.toFixed(2)}
+          <Typography variant="h4">
+            ${expense.amount.toFixed(2)}
           </Typography>
         </Box>
-        <Box sx={{ position: 'relative', height: 8, bgcolor: 'background.default' }}>
+
+        <Box mb={2}>
+          <Typography variant="subtitle2" color="text.secondary">
+            Spent
+          </Typography>
+          <Typography variant="h5" color={totalSpent > expense.amount ? 'error.main' : 'success.main'}>
+            ${totalSpent.toFixed(2)}
+          </Typography>
           <LinearProgress 
             variant="determinate" 
             value={Math.min(percentageSpent, 100)}
-            sx={{ 
-              height: '100%',
-              bgcolor: 'background.default',
-              '& .MuiLinearProgress-bar': {
-                bgcolor: category?.color || 'primary.main'
-              }
-            }}
+            color={totalSpent > expense.amount ? 'error' : 'primary'}
+            sx={{ mt: 1 }}
           />
         </Box>
-      </Box>
 
-      {/* Transactions */}
-      <Box>
-        <Box sx={{ 
-          display: 'flex', 
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          mb: 2
-        }}>
-          <Typography variant="subtitle1">
-            Transactions
+        <Box mb={2}>
+          <Typography variant="subtitle2" color="text.secondary">
+            Remaining
           </Typography>
-          <Button
-            variant="outlined"
-            size="small"
-            onClick={handleAddTransaction}
-          >
-            Add Transaction
-          </Button>
+          <Typography variant="h5" color={remaining < 0 ? 'error.main' : 'success.main'}>
+            ${remaining.toFixed(2)}
+          </Typography>
         </Box>
 
-        <List>
-          {transactions.map(transaction => (
+        <Divider sx={{ my: 2 }} />
+
+        <Box mb={2}>
+          <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+            Fund
+          </Typography>
+          <FundSelector
+            value={expense.fundId || null}
+            onChange={handleFundChange}
+            userId={user?.id || ''}
+          />
+        </Box>
+      </Paper>
+
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+        <Typography variant="h6">Transactions</Typography>
+        <Button
+          variant="outlined"
+          size="small"
+          onClick={() => setTransactionDialogOpen(true)}
+          disabled={!expense.fundId}
+        >
+          Add Transaction
+        </Button>
+      </Box>
+
+      <List>
+        {(expense.transactions || []).map((transaction) => (
+          <React.Fragment key={transaction.id}>
             <ListItem
-              key={transaction.id}
               secondaryAction={
-                <IconButton 
-                  edge="end" 
+                <IconButton
+                  edge="end"
                   aria-label="delete"
                   onClick={() => transaction.id && handleDeleteTransaction(transaction.id)}
                 >
                   <Delete />
                 </IconButton>
               }
-              sx={{
-                bgcolor: 'background.paper',
-                mb: 1,
-                borderRadius: 1,
-                border: '1px solid',
-                borderColor: 'divider'
-              }}
             >
               <ListItemText
                 primary={transaction.description}
                 secondary={
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="body2" color="text.secondary">
-                      {transaction.date.toLocaleDateString()}
-                    </Typography>
-                    <Typography variant="body2">
+                  <>
+                    <Typography component="span" variant="body2" color="text.primary">
                       ${transaction.amount.toFixed(2)}
                     </Typography>
-                  </Box>
+                    {' — '}
+                    {new Date(transaction.date).toLocaleDateString()}
+                  </>
                 }
               />
             </ListItem>
-          ))}
-          {transactions.length === 0 && (
-            <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
-              No transactions yet
-            </Typography>
-          )}
-        </List>
-      </Box>
+            <Divider component="li" />
+          </React.Fragment>
+        ))}
+      </List>
+
+      <TransactionDialog
+        open={transactionDialogOpen}
+        onClose={() => setTransactionDialogOpen(false)}
+        transaction={{
+          date: new Date(),
+          description: '',
+          amount: 0,
+          categoryName: 'Expense',
+          sourceName: expense.name,
+          type: 'expense'
+        }}
+      />
     </Box>
   );
-}
+};
 
 export default ExpenseDetail; 

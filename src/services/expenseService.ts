@@ -2,6 +2,20 @@ import { supabase } from './supabase';
 import { BudgetExpense } from '../models/Budget';
 import { createFundTransaction } from './fundService';
 
+// Helper function to map database fields to camelCase
+const mapExpense = (data: any): BudgetExpense => ({
+  id: data.id,
+  name: data.name,
+  amount: data.amount,
+  dueDate: data.due_date,
+  categoryId: data.category_id,
+  fundId: data.fund_id,
+  budgetId: data.budget_id,
+  createdAt: data.created_at,
+  updatedAt: data.updated_at,
+  sequenceNumber: data.sequence_number
+});
+
 // Create a new expense
 export const createExpense = async (expense: Omit<BudgetExpense, 'id'>): Promise<BudgetExpense> => {
   console.log('createExpense', expense);
@@ -22,7 +36,7 @@ export const createExpense = async (expense: Omit<BudgetExpense, 'id'>): Promise
     .single();
 
   if (error) throw error;
-  return data;
+  return mapExpense(data);
 };
 
 // Get all expenses for a budget
@@ -36,7 +50,7 @@ export const getBudgetExpenses = async (budgetId: string): Promise<BudgetExpense
     .eq('budget_id', budgetId);
 
   if (error) throw error;
-  return data || [];
+  return (data || []).map(mapExpense);
 };
 
 // Update an expense
@@ -56,7 +70,7 @@ export const updateExpense = async (id: string, updates: Partial<BudgetExpense>)
     .single();
 
   if (error) throw error;
-  return data;
+  return mapExpense(data);
 };
 
 // Delete an expense
@@ -115,5 +129,5 @@ export const updateExpenses = async (expenses: BudgetExpense[]): Promise<BudgetE
         .select();
 
   if (error) throw error;
-  return data || [];
+  return (data || []).map(mapExpense);
 }; 

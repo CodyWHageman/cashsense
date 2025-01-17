@@ -33,15 +33,27 @@ function Header({
   const [menuAnchor, setMenuAnchor] = React.useState<HTMLElement | null>(null);
 
   const handlePreviousMonth = () => {
-    const date = new Date(year, month - 1);
-    date.setMonth(date.getMonth() - 1);
-    onMonthChange?.(date.getMonth() + 1, date.getFullYear());
+    let newMonth = month - 1;
+    let newYear = year;
+    
+    if (newMonth < 1) {
+      newMonth = 12;
+      newYear = year - 1;
+    }
+    
+    onMonthChange?.(newMonth, newYear);
   };
 
   const handleNextMonth = () => {
-    const date = new Date(year, month - 1);
-    date.setMonth(date.getMonth() + 1);
-    onMonthChange?.(date.getMonth() + 1, date.getFullYear());
+    let newMonth = month + 1;
+    let newYear = year;
+    
+    if (newMonth > 12) {
+      newMonth = 1;
+      newYear = year + 1;
+    }
+    
+    onMonthChange?.(newMonth, newYear);
   };
 
   const leftToBudget = totalIncome - totalPlanned;

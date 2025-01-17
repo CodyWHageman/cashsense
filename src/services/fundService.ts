@@ -1,5 +1,41 @@
 import { supabase } from './supabase';
 import { Fund } from '../models/Budget';
+import { Transaction, FundTransaction } from '../models/Transaction';
+
+// Helper functions to map database fields to camelCase
+const mapTransaction = (data: any): Transaction => ({
+  id: data.id,
+  hashId: data.hash_id,
+  amount: data.amount,
+  date: data.date,
+  description: data.description,
+  expenseId: data.expense_id,
+  createdAt: data.created_at,
+  updatedAt: data.updated_at
+});
+
+const mapFundTransaction = (data: any): FundTransaction => ({
+  id: data.id,
+  fundId: data.fund_id,
+  transactionId: data.transaction_id,
+  type: data.type,
+  transferComplete: data.transfer_complete,
+  createdAt: data.created_at,
+  updatedAt: data.updated_at,
+  transaction: data.transaction ? mapTransaction(data.transaction) : undefined,
+  transferTransactionId: data.transfer_transaction_id
+});
+
+const mapFund = (data: any): Fund => ({
+  id: data.id,
+  name: data.name,
+  description: data.description,
+  targetAmount: data.target_amount,
+  userId: data.user_id,
+  createdAt: data.created_at,
+  updatedAt: data.updated_at,
+  fundTransactions: data.fund_transactions ? data.fund_transactions.map(mapFundTransaction) : []
+});
 
 // Create a new fund
 export const createFund = async (fund: Omit<Fund, 'id'>): Promise<Fund> => {
@@ -17,13 +53,14 @@ export const createFund = async (fund: Omit<Fund, 'id'>): Promise<Fund> => {
       *,
       fund_transactions(
         *,
-        transaction:transactions(*)
+        transaction:transactions!fund_transactions_transaction_id_fkey(*),
+        transfer_transaction:transactions!fund_transactions_transfer_transaction_id_fkey (*)
       )
     `)
     .single();
 
   if (error) throw error;
-  return data;
+  return mapFund(data);
 };
 
 // Get all funds for a user
@@ -34,14 +71,15 @@ export const getUserFunds = async (userId: string): Promise<Fund[]> => {
       *,
       fund_transactions(
         *,
-        transaction:transactions(*)
+        transaction:transactions!fund_transactions_transaction_id_fkey(*),
+        transfer_transaction:transactions!fund_transactions_transfer_transaction_id_fkey (*)
       )
     `)
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
 
   if (error) throw error;
-  return data || [];
+  return (data || []).map(mapFund);
 };
 
 // Get a single fund by ID
@@ -52,14 +90,15 @@ export const getFundById = async (id: string): Promise<Fund | null> => {
       *,
       fund_transactions(
         *,
-        transaction:transactions(*)
+        transaction:transactions!fund_transactions_transaction_id_fkey(*),
+        transfer_transaction:transactions!fund_transactions_transfer_transaction_id_fkey (*)
       )
     `)
     .eq('id', id)
     .single();
 
   if (error) throw error;
-  return data;
+  return data ? mapFund(data) : null;
 };
 
 // Update a fund
@@ -77,13 +116,14 @@ export const updateFund = async (id: string, updates: Partial<Fund>): Promise<Fu
       *,
       fund_transactions(
         *,
-        transaction:transactions(*)
+        transaction:transactions!fund_transactions_transaction_id_fkey(*),
+        transfer_transaction:transactions!fund_transactions_transfer_transaction_id_fkey (*)
       )
     `)
     .single();
 
   if (error) throw error;
-  return data;
+  return mapFund(data);
 };
 
 // Delete a fund
@@ -136,7 +176,7 @@ export const getFundBalance = async (fundId: string): Promise<number> => {
     .from('fund_transactions')
     .select(`
       type,
-      transaction:transactions!inner(amount)
+      transaction:transactions!fund_transactions_transaction_id_fkey(amount)
     `)
     .eq('fund_id', fundId);
 
@@ -146,4 +186,56 @@ export const getFundBalance = async (fundId: string): Promise<number> => {
     const amount = ft.transaction[0].amount;
     return ft.type === 'deposit' ? balance + amount : balance - amount;
   }, 0);
+};
+
+export const getPendingFundTransactions = async (fundId: string): Promise<FundTransaction[]> => {
+  const { data, error } = await supabase
+    .from('fund_transactions')
+    .select(`
+      *,
+        transaction:transactions!fund_transactions_transaction_id_fkey(*),
+        transfer_transaction:transactions!fund_transactions_transfer_transaction_id_fkey (*)
+    `)
+    .eq('fund_id', fundId)
+    .eq('transfer_complete', false)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return (data || []).map(mapFundTransaction);
+};
+
+export const markFundTransferComplete = async (
+  fundId: string,
+  fundTransactionId: string,
+  transferTransactionId: string
+): Promise<void> => {
+  const { error } = await supabase
+    .from('fund_transactions')
+    .update({ 
+      transfer_complete: true,
+      transfer_transaction_id: transferTransactionId 
+    })
+    .eq('id', fundTransactionId)
+    .eq('fund_id', fundId);
+
+  if (error) throw error;
+};
+
+export const updateFundTransaction = async (
+  fundTransactionId: string,
+  updates: {
+    transferTransactionId?: string;
+    transferComplete?: boolean;
+  }
+): Promise<void> => {
+  const { error } = await supabase
+    .from('fund_transactions')
+    .update({
+      transfer_transaction_id: updates.transferTransactionId,
+      transfer_complete: updates.transferComplete,
+      updated_at: new Date()
+    })
+    .eq('id', fundTransactionId);
+
+  if (error) throw error;
 }; 
