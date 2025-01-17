@@ -29,7 +29,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy:dev": "npm run build && firebase deploy --only hosting -P dev",
+    "deploy:prod": "npm run build && firebase deploy --only hosting -P prod",
+    "build:dev": "env-cmd -f .env.development npm run build",
+    "build:prod": "env-cmd -f .env.production npm run build"
   },
   "eslintConfig": {
     "extends": [
