@@ -1,3 +1,12 @@
+-- Create updated_at trigger function
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
 -- Create budgets table
 CREATE TABLE budgets (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -15,6 +24,7 @@ CREATE TABLE expense_categories (
   name TEXT NOT NULL,
   color TEXT NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   user_id UUID NOT NULL
 );
 
@@ -61,16 +71,14 @@ CREATE TABLE budget_incomes (
 -- Create transactions table
 CREATE TABLE transactions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  hash_id TEXT,
+  hash_id TEXT NOT NULL UNIQUE,
   date TIMESTAMP WITH TIME ZONE NOT NULL,
   description TEXT NOT NULL,
   amount DECIMAL(10,2) NOT NULL,
-  account TEXT NOT NULL,
   income_id UUID REFERENCES budget_incomes(id) ON DELETE RESTRICT,
   expense_id UUID REFERENCES budget_expenses(id) ON DELETE RESTRICT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-  CHECK (income_id IS NOT NULL OR expense_id IS NOT NULL)
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create funds table
@@ -87,8 +95,9 @@ CREATE TABLE funds (
 -- Create fund_transactions table
 CREATE TABLE fund_transactions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  fund_id UUID NOT NULL REFERENCES funds(id) ON DELETE RESTRICT,
-  transaction_id UUID NOT NULL REFERENCES transactions(id) ON DELETE RESTRICT,
+  fund_id UUID NOT NULL REFERENCES funds(id) ON DELETE CASCADE,
+  transaction_id UUID NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+  transfer_transaction_id UUID REFERENCES transactions(id) ON DELETE SET NULL,
   type TEXT NOT NULL CHECK (type IN ('deposit', 'withdrawal')),
   transfer_complete BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -343,4 +352,43 @@ CREATE POLICY "Users can delete transactions in their funds"
     SELECT 1 FROM funds
     WHERE funds.id = fund_transactions.fund_id
     AND funds.user_id = auth.uid()
-  )); 
+  ));
+
+-- Add import_templates table
+CREATE TABLE import_templates (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL,
+  amount_key TEXT NOT NULL,
+  transaction_date_key TEXT NOT NULL,
+  description_key TEXT NOT NULL,
+  file_type TEXT NOT NULL CHECK (file_type IN ('CSV', 'JSON')),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Add RLS policies for import_templates
+ALTER TABLE import_templates ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view their own import templates"
+  ON import_templates FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can create their own import templates"
+  ON import_templates FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own import templates"
+  ON import_templates FOR UPDATE
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own import templates"
+  ON import_templates FOR DELETE
+  USING (auth.uid() = user_id);
+
+-- Add updated_at trigger
+CREATE TRIGGER set_import_templates_updated_at
+  BEFORE UPDATE ON import_templates
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column(); 

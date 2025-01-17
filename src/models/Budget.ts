@@ -1,3 +1,5 @@
+import { FundTransaction, Transaction } from "./Transaction";
+
 export interface Budget {
   id: string;
   month: number;
@@ -7,7 +9,7 @@ export interface Budget {
   userId: string;
   expenses?: BudgetExpense[];
   incomes?: BudgetIncome[];
-  categories?: ExpenseCategory[];
+  categories?: BudgetCategory[];
 }
 
 export interface BudgetExpense {
@@ -21,6 +23,7 @@ export interface BudgetExpense {
   createdAt: Date;
   updatedAt: Date;
   sequenceNumber: number;
+  transactions?: Transaction[];
 }
 
 export interface BudgetIncome {
@@ -32,6 +35,7 @@ export interface BudgetIncome {
   expectedDate: Date;
   createdAt: Date;
   updatedAt: Date;
+  transactions?: Transaction[];
 }
 
 export interface ExpenseCategory {
@@ -40,6 +44,15 @@ export interface ExpenseCategory {
   color: string;
   createdAt: Date;
   userId: string;
+}
+
+export interface BudgetCategory {
+  id: string;
+  budgetId: string;
+  category: ExpenseCategory;
+  createdAt: Date;
+  updatedAt: Date;
+  sequenceNumber: number;
 }
 
 export interface BudgetExpenseCategoryAssociation {
@@ -56,4 +69,5 @@ export interface Fund {
   createdAt: Date;
   updatedAt: Date;
   userId: string;
+  fundTransactions?: FundTransaction[];
 }

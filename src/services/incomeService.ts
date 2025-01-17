@@ -1,6 +1,18 @@
 import { supabase } from './supabase';
 import { BudgetIncome } from '../models/Budget';
 
+// Helper function to map database fields to camelCase
+const mapIncome = (data: any): BudgetIncome => ({
+  id: data.id,
+  name: data.name,
+  amount: data.amount,
+  frequency: data.frequency,
+  expectedDate: data.expected_date,
+  budgetId: data.budget_id,
+  createdAt: data.created_at,
+  updatedAt: data.updated_at
+});
+
 // Create a new income
 export const createIncome = async (income: Omit<BudgetIncome, 'id'>): Promise<BudgetIncome> => {
     console.log('Creating income:', income);
@@ -19,7 +31,7 @@ export const createIncome = async (income: Omit<BudgetIncome, 'id'>): Promise<Bu
     .single();
 
   if (error) throw error;
-  return data;
+  return mapIncome(data);
 };
 
 // Get all incomes for a budget
@@ -30,7 +42,7 @@ export const getBudgetIncomes = async (budgetId: string): Promise<BudgetIncome[]
     .eq('budget_id', budgetId);
 
   if (error) throw error;
-  return data || [];
+  return (data || []).map(mapIncome);
 };
 
 // Update an income
@@ -42,7 +54,6 @@ export const updateIncome = async (id: string, updates: Partial<BudgetIncome>): 
         amount: updates.amount,
         frequency: updates.frequency,
         expected_date: updates.expectedDate,
-        created_at: updates.createdAt,
         updated_at: new Date()
     })
     .eq('id', id)
@@ -50,7 +61,7 @@ export const updateIncome = async (id: string, updates: Partial<BudgetIncome>): 
     .single();
 
   if (error) throw error;
-  return data;
+  return mapIncome(data);
 };
 
 // Delete an income
@@ -67,9 +78,17 @@ export const deleteIncome = async (id: string): Promise<void> => {
 export const updateIncomes = async (incomes: BudgetIncome[]): Promise<BudgetIncome[]> => {
   const { data, error } = await supabase
     .from('budget_incomes')
-    .upsert(incomes)
+    .upsert(incomes.map(income => ({
+      id: income.id,
+      name: income.name,
+      amount: income.amount,
+      frequency: income.frequency,
+      expected_date: income.expectedDate,
+      budget_id: income.budgetId,
+      updated_at: new Date()
+    })))
     .select();
 
   if (error) throw error;
-  return data || [];
+  return (data || []).map(mapIncome);
 }; 

@@ -1,13 +1,12 @@
 import React, { useState, Suspense } from 'react';
 import { CssBaseline, ThemeProvider, CircularProgress, Box } from '@mui/material';
-import { Theme } from '@mui/material/styles';
 import { SnackbarProvider } from 'notistack';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { getDefaultTheme } from './utils/defaultTheme';
+import { getDefaultTheme } from './theme';
 import { useAuth, AuthProvider } from './contexts/AuthContext';
 
 // Lazy load components
-const BudgetHome = React.lazy(() => import('./components/BudgetHome'));
+const BudgetHome = React.lazy(() => import('./components/Home'));
 const Login = React.lazy(() => import('./components/Login'));
 const Signup = React.lazy(() => import('./components/Signup'));
 

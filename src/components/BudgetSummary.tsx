@@ -23,7 +23,6 @@ interface Category {
 
 interface BudgetSummaryProps {
   expenses: BudgetExpense[];
-  transactions: Transaction[];
   incomes: Array<{
     id: string;
     amount: number;
@@ -33,7 +32,6 @@ interface BudgetSummaryProps {
 
 function BudgetSummary({ 
   expenses = [], 
-  transactions = [], 
   incomes = [], 
   categories = []
 }: BudgetSummaryProps) {
@@ -42,12 +40,21 @@ function BudgetSummary({
   
   // Calculate totals by category
   const categoryTotals = (categories || []).map(category => {
+    // Get all expenses for this category
     const categoryExpenses = (expenses || []).filter(e => e.categoryId === category.id);
+    
+    // Calculate planned amount (sum of all expense amounts in this category)
     const planned = categoryExpenses.reduce((sum, expense) => sum + expense.amount, 0);
-    const spent = (transactions || [])
-      .filter(t => categoryExpenses.some(e => e.id === t.expenseId))
-      .reduce((sum, t) => sum + t.amount, 0);
+    
+    // Calculate spent amount (sum of all transactions for expenses in this category)
+    const spent = categoryExpenses.reduce((sum, expense) => {
+      return sum + (expense.transactions || []).reduce((tSum, t) => tSum + t.amount, 0);
+    }, 0);
+
+    // Calculate remaining (planned - spent)
     const remaining = planned - spent;
+    
+    // Calculate percentage spent of planned
     const percentage = planned > 0 ? Math.round((spent / planned) * 100) : 0;
 
     return {
@@ -78,14 +85,18 @@ function BudgetSummary({
     { id: 'remaining' as const, label: 'REMAINING' }
   ];
 
+  // Calculate totals for the center display
   const getDisplayValue = () => {
+    const totalPlanned = categoryTotals.reduce((sum, cat) => sum + cat.planned, 0);
+    const totalSpent = categoryTotals.reduce((sum, cat) => sum + cat.spent, 0);
+    
     switch (currentTab) {
       case 'planned':
-        return totalIncome;
+        return totalPlanned;
       case 'spent':
-        return transactions.reduce((sum, t) => sum + t.amount, 0);
+        return totalSpent;
       case 'remaining':
-        return totalIncome - transactions.reduce((sum, t) => sum + t.amount, 0);
+        return totalPlanned - totalSpent;
       default:
         return 0;
     }
@@ -127,13 +138,13 @@ function BudgetSummary({
         textAlign: 'center', 
         mb: 4,
         position: 'relative',
-        height: 300
+        height: 240
       }}>
         {pieData.length > 0 ? (
           <ResponsivePie
             data={pieData}
             margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
-            innerRadius={0.6}
+            innerRadius={0.75}
             padAngle={0.5}
             cornerRadius={3}
             colors={d => d.data.color}
@@ -174,35 +185,45 @@ function BudgetSummary({
 
       {/* Categories Table */}
       <TableContainer component={Paper} sx={{ boxShadow: 'none' }}>
-        <Table>
+        <Table size="small">
           <TableBody>
             {categoryTotals.map((category) => (
-              <TableRow key={category.id}>
+              <TableRow 
+                key={category.id}
+                sx={{ 
+                  '& .MuiTableCell-root': { 
+                    py: 0.75,  // Reduced vertical padding
+                    borderBottom: 'none'  // Remove dividing lines
+                  }
+                }}
+              >
                 <TableCell>
                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
                     <Box
                       sx={{
-                        width: 12,
-                        height: 12,
+                        width: 10,  // Slightly smaller color indicator
+                        height: 10,
                         borderRadius: '2px',
                         bgcolor: category.color,
                         mr: 1
                       }}
                     />
-                    <Typography sx={{ color: category.color }}>
+                    <Typography variant="body2" sx={{ color: category.color }}>
                       {category.id}
                     </Typography>
                   </Box>
                 </TableCell>
                 <TableCell align="right">
-                  ${Math.abs(currentTab === 'planned' ? category.planned : 
-                           currentTab === 'spent' ? category.spent : 
-                           category.remaining).toFixed(2)}
-                  {currentTab === 'planned' && (
-                    <Typography component="span" color="text.secondary" sx={{ ml: 1 }}>
-                      ({Math.round((category.planned / totalIncome) * 100)}%)
-                    </Typography>
-                  )}
+                  <Typography variant="body2">
+                    ${Math.abs(currentTab === 'planned' ? category.planned : 
+                             currentTab === 'spent' ? category.spent : 
+                             category.remaining).toFixed(2)}
+                    {currentTab === 'planned' && (
+                      <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                        ({Math.round((category.planned / totalIncome) * 100)}%)
+                      </Typography>
+                    )}
+                  </Typography>
                 </TableCell>
               </TableRow>
             ))}

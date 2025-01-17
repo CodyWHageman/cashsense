@@ -4,7 +4,6 @@ export interface Transaction {
   date: Date;
   description: string;
   amount: number;
-  account: string;
   incomeId?: string;
   expenseId?: string;
   createdAt: Date;
@@ -15,19 +14,21 @@ export interface FundTransaction {
   id: string;
   fundId: string;
   transactionId: string;
+  transferTransactionId?: string;
   type: 'deposit' | 'withdrawal';
   transferComplete: boolean;
   createdAt: Date;
   updatedAt: Date;
+  transaction?: Transaction;
+  transferTransaction?: Transaction;
 }
 
 export const createTransaction = (data: Partial<Transaction>): Transaction => {
   return {
     id: data.id || crypto.randomUUID(),
     date: data.date ? new Date(data.date) : new Date(),
-    amount: Math.abs(parseFloat(data.amount?.toString() || '0')),
+    amount: data.amount || 0,
     description: data.description?.trim() || '',
-    account: data.account || 'default',
     incomeId: data.incomeId,
     expenseId: data.expenseId,
     createdAt: data.createdAt ? new Date(data.createdAt) : new Date(),

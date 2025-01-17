@@ -2,155 +2,151 @@ import React, { useState } from 'react';
 import { 
   Box, 
   Typography, 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableContainer, 
-  TableHead, 
-  TableRow,
+  List, 
+  ListItem, 
+  ListItemText, 
   IconButton,
-  Paper,
-  Menu,
-  MenuItem
+  Paper
 } from '@mui/material';
-import { MoreVert, Delete } from '@mui/icons-material';
+import { Delete } from '@mui/icons-material';
 import { Transaction } from '../models/Transaction';
-import { BudgetExpense } from '../models/Budget';
+import { BudgetExpense, ExpenseCategory, BudgetIncome } from '../models/Budget';
+import TransactionDialog from './TransactionDialog';
 
 interface TransactionHistoryProps {
-  transactions: Transaction[];
-  categories: Array<{
-    id: string;
-    name: string;
-  }>;
   expenses: BudgetExpense[];
+  incomes: BudgetIncome[];
+  categories: ExpenseCategory[];
   onDeleteTransaction: (transactionId: string) => void;
 }
 
-interface MenuState {
-  element: HTMLElement | null;
-  transactionId: string | null;
-}
-
 function TransactionHistory({ 
-  transactions = [], 
+  expenses = [], 
+  incomes = [],
   categories = [], 
-  expenses = [],
-  onDeleteTransaction
+  onDeleteTransaction 
 }: TransactionHistoryProps) {
-  const [menuAnchor, setMenuAnchor] = useState<MenuState>({ 
-    element: null, 
-    transactionId: null 
-  });
+  const [selectedTransaction, setSelectedTransaction] = useState<null | {
+    date: Date;
+    description: string;
+    amount: number;
+    categoryName: string;
+    sourceName: string;
+    type: 'income' | 'expense';
+    categoryColor?: string;
+  }>(null);
 
-  const handleOpenMenu = (event: React.MouseEvent<HTMLButtonElement>, transactionId: string) => {
-    event.stopPropagation();
-    setMenuAnchor({ element: event.currentTarget, transactionId });
-  };
+  // Get all transactions from both expenses and incomes
+  const allTransactions = [
+    ...expenses.flatMap(expense => 
+      (expense.transactions || []).map(t => ({
+        ...t,
+        categoryName: categories.find(c => c.id === expense.categoryId)?.name || 'Unknown',
+        categoryColor: categories.find(c => c.id === expense.categoryId)?.color,
+        sourceName: expense.name,
+        type: 'expense' as const
+      }))
+    ),
+    ...incomes.flatMap(income => 
+      (income.transactions || []).map(t => ({
+        ...t,
+        categoryName: 'Income',
+        categoryColor: '#4caf50', // Green color for income
+        sourceName: income.name,
+        type: 'income' as const
+      }))
+    )
+  ].sort((a, b) => b.date.getTime() - a.date.getTime()); // Sort by date, newest first
 
-  const handleCloseMenu = () => {
-    setMenuAnchor({ element: null, transactionId: null });
-  };
-
-  const getExpenseName = (transaction: Transaction): string => {
-    const expense = expenses.find(e => e.id === transaction.expenseId);
-    return expense?.name || 'Uncategorized';
-  };
-
-  const getCategoryName = (transaction: Transaction): string => {
-    const expense = expenses.find(e => e.id === transaction.expenseId);
-    if (!expense) return 'Uncategorized';
-    const category = categories.find(c => c.id === expense.categoryId);
-    return category?.name || 'Uncategorized';
-  };
-
-  const formatDate = (date: Date | string): string => {
-    if (!date) return '';
-    const dateObj = date instanceof Date ? date : new Date(date);
-    return dateObj.toLocaleDateString();
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
   return (
-    <Box sx={{ mt: 4 }}>
-      <Typography variant="h6" sx={{ mb: 2, color: 'text.primary' }}>
-        Recent Transactions
-      </Typography>
-      <TableContainer 
-        component={Paper}
-        sx={{ 
-          border: '1px solid',
-          borderColor: 'divider',
-          boxShadow: 'none',
-          borderRadius: 1
-        }}
-      >
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Date</TableCell>
-              <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Description</TableCell>
-              <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Category</TableCell>
-              <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Expense</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 600, color: 'text.secondary' }}>Amount</TableCell>
-              <TableCell width={48}></TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {transactions.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
-                  <Typography color="text.secondary">
-                    No transactions yet
+    <Box>
+      <Paper className="budget-list-container">
+        <List sx={{ py: 0 }}>
+          {allTransactions.map(transaction => (
+            <ListItem
+              key={transaction.id}
+              onClick={() => setSelectedTransaction(transaction)}
+              sx={{
+                cursor: 'pointer',
+                py: 1,
+                '&:hover': {
+                  backgroundColor: 'action.hover',
+                  '& .transaction-amount': {
+                    display: 'none'
+                  },
+                  '& .delete-button': {
+                    display: 'flex'
+                  }
+                }
+              }}
+            >
+              <Box sx={{ minWidth: 50, mr: 2, textAlign: 'center' }}>
+                <Typography variant="body2" color="text.secondary">
+                  {formatDate(transaction.date)}
+                </Typography>
+              </Box>
+              <ListItemText
+                primary={
+                  <Typography
+                    sx={{
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    {transaction.description}
                   </Typography>
-                </TableCell>
-              </TableRow>
-            ) : (
-              transactions.map(transaction => (
-                <TableRow 
-                  key={transaction.id}
+                }
+              />
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <Typography 
+                  className="transaction-amount"
                   sx={{ 
-                    '&:hover': { 
-                      backgroundColor: 'background.default' 
-                    }
+                    color: transaction.type === 'income' ? 'success.main' : 'text.primary',
+                    fontWeight: 500
                   }}
                 >
-                  <TableCell>{formatDate(transaction.date)}</TableCell>
-                  <TableCell>{transaction.description}</TableCell>
-                  <TableCell>{getCategoryName(transaction)}</TableCell>
-                  <TableCell>{getExpenseName(transaction)}</TableCell>
-                  <TableCell align="right">${transaction.amount.toFixed(2)}</TableCell>
-                  <TableCell>
-                    <IconButton
-                      size="small"
-                      onClick={(e) => transaction.id && handleOpenMenu(e, transaction.id)}
-                    >
-                      <MoreVert />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+                  {transaction.type === 'income' ? '+' : '-'}${Math.abs(transaction.amount).toFixed(2)}
+                </Typography>
+                <IconButton 
+                  className="delete-button"
+                  edge="end" 
+                  aria-label="delete"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    transaction.id && onDeleteTransaction(transaction.id);
+                  }}
+                  sx={{ 
+                    color: 'text.secondary',
+                    display: 'none'
+                  }}
+                >
+                  <Delete />
+                </IconButton>
+              </Box>
+            </ListItem>
+          ))}
+          {allTransactions.length === 0 && (
+            <ListItem>
+              <Typography color="text.secondary" sx={{ width: '100%', textAlign: 'center', py: 2 }}>
+                No transactions yet
+              </Typography>
+            </ListItem>
+          )}
+        </List>
+      </Paper>
 
-      <Menu
-        anchorEl={menuAnchor.element}
-        open={Boolean(menuAnchor.element)}
-        onClose={handleCloseMenu}
-      >
-        <MenuItem 
-          onClick={() => {
-            if (menuAnchor.transactionId) {
-              onDeleteTransaction(menuAnchor.transactionId);
-              handleCloseMenu();
-            }
-          }}
-          sx={{ color: 'error.main' }}
-        >
-          <Delete sx={{ mr: 1 }} /> Delete
-        </MenuItem>
-      </Menu>
+      {selectedTransaction && (
+        <TransactionDialog
+          open={Boolean(selectedTransaction)}
+          onClose={() => setSelectedTransaction(null)}
+          transaction={selectedTransaction}
+        />
+      )}
     </Box>
   );
 }

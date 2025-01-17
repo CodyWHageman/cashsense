@@ -14,9 +14,10 @@ import {
   DialogContent,
   DialogActions,
   TextField,
-  Collapse
+  Collapse,
+  Paper
 } from '@mui/material';
-import { Add, MoreVert, Edit, Delete, ExpandMore } from '@mui/icons-material';
+import { Add, MoreVert, Edit, Delete, ExpandMore, LocalAtmTwoTone } from '@mui/icons-material';
 import { Transaction } from '../models/Transaction';
 import { BudgetIncome, Budget } from '../models/Budget';
 import { createIncome, updateIncome, deleteIncome } from '../services/incomeService';
@@ -24,10 +25,9 @@ import { updateBudget } from '../services/budgetService';
 import { getJavaScriptMonth, getMonthName } from '../utils/dateUtils';
 
 interface BudgetIncomeProps {
-  incomes: BudgetIncome[];
-  transactions: Transaction[];
   updateIncomes: (incomes: BudgetIncome[]) => void;
   currentBudget: Budget;
+  addTransaction: (transaction: Transaction, importedId?: string) => Promise<void>;
 }
 
 interface EditDialogState {
@@ -40,11 +40,10 @@ interface MenuState {
   incomeId: string | null;
 }
 
-function BudgetIncomeComponent({ 
-  incomes = [], 
-  transactions = [],
+function BudgetIncomeComponent({
   updateIncomes,
-  currentBudget
+  currentBudget,
+  addTransaction
 }: BudgetIncomeProps) {
   const [editDialog, setEditDialog] = useState<EditDialogState>({ 
     open: false, 
@@ -54,7 +53,7 @@ function BudgetIncomeComponent({
     element: null, 
     incomeId: null 
   });
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
 
   const handleOpenMenu = (event: React.MouseEvent<HTMLButtonElement>, incomeId: string) => {
     event.stopPropagation();
@@ -85,7 +84,7 @@ function BudgetIncomeComponent({
     handleCloseMenu();
     try {
       await deleteIncome(incomeId);
-      const updatedIncomes = incomes.filter(income => income.id !== incomeId);
+      const updatedIncomes = currentBudget.incomes?.filter(income => income.id !== incomeId) || [];
       updateIncomes(updatedIncomes);
     } catch (error) {
       console.error('Error deleting income:', error);
@@ -120,8 +119,8 @@ function BudgetIncomeComponent({
       }
 
       const updatedIncomes = 'id' in editDialog.income && editDialog.income.id
-        ? incomes.map(i => i.id === updatedIncome.id ? updatedIncome : i)
-        : [...incomes, updatedIncome];
+        ? currentBudget.incomes?.map(i => i.id === updatedIncome.id ? updatedIncome : i) || []
+        : [...(currentBudget.incomes || []), updatedIncome];
 
       updateIncomes(updatedIncomes);
       setEditDialog({ open: false, income: null });
@@ -131,140 +130,152 @@ function BudgetIncomeComponent({
   };
 
   const getIncomeReceived = (incomeId: string): number => {
-    return transactions
-      .filter(t => t.incomeId === incomeId)
-      .reduce((sum, t) => sum + t.amount, 0);
+    return currentBudget.incomes
+      ?.filter(t => t.id === incomeId)[0]
+      ?.transactions
+      ?.reduce((sum, t) => sum + t.amount, 0) || 0;
   };
 
-  const totalPlanned = incomes.reduce((sum, income) => sum + income.amount, 0);
-  const totalReceived = incomes.reduce((sum, income) => sum + getIncomeReceived(income.id), 0);
+  const totalPlanned = currentBudget.incomes?.reduce((sum, income) => sum + income.amount, 0) || 0;
+  const totalReceived = currentBudget.incomes?.reduce((sum, income) => sum + getIncomeReceived(income.id), 0) || 0;
 
   const handleToggle = () => {
     setExpanded(!expanded);
   };
-
+  
   return (
-    <Box sx={{ mb: 4 }}>
-      <Box
-        onClick={handleToggle}
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          cursor: 'pointer',
-          mb: 2
-        }}
-      >
-        <ExpandMore
-          sx={{
-            transform: expanded ? 'rotate(180deg)' : 'none',
-            transition: 'transform 0.2s'
-          }}
-        />
-        <Typography variant="h6" sx={{ ml: 1 }}>
-          Income for {getMonthName(getJavaScriptMonth(currentBudget.month))}
+    <Box className="category-section" sx={{ mb: 4 }}>
+      {/* Header Row */}
+      <Box sx={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 120px 120px 40px',
+        gap: 1,
+        alignItems: 'center',
+        p: 1,
+        borderBottom: 1,
+        borderColor: 'divider'
+      }}>
+        {/* Title and Expand Icon */}
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <ExpandMore
+            onClick={handleToggle}
+            sx={{
+              transform: expanded ? 'rotate(180deg)' : 'none',
+              transition: 'transform 0.2s',
+              cursor: 'pointer',
+              mr: 1
+            }}
+          />
+          <LocalAtmTwoTone sx={{ mr: 1, color: 'primary.main' }} />
+          <Typography variant="subtitle1">
+            Income for {getMonthName(currentBudget.month)}
+          </Typography>
+        </Box>
+
+        {/* Column Headers */}
+        <Typography variant="body2" sx={{ textAlign: 'right', color: 'text.secondary' }}>
+          Planned
         </Typography>
+        <Typography variant="body2" sx={{ textAlign: 'right', color: 'text.secondary' }}>
+          Received
+        </Typography>
+        <Box /> {/* Spacer for menu button column */}
       </Box>
+
       <Collapse in={expanded}>
-        <Box sx={{ 
-          backgroundColor: 'background.paper',
-          borderRadius: 1,
-          border: '1px solid',
-          borderColor: 'divider',
-          mb: 2
-        }}>
-          <List sx={{ py: 0 }}>
-            {incomes.map(income => {
-              const received = getIncomeReceived(income.id);
-              const remaining = income.amount - received;
-              
-              return (
-                <ListItem
-                  key={income.id}
-                  sx={{
-                    py: 1,
-                    borderBottom: '1px solid',
-                    borderColor: 'divider',
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 200px 200px',
-                    gap: 2,
-                    alignItems: 'center'
-                  }}
-                >
-                  <ListItemText primary={income.name} />
-                  <Typography sx={{ textAlign: 'right' }}>
-                    ${income.amount.toFixed(2)}
-                  </Typography>
-                  <Typography sx={{ 
-                    textAlign: 'right',
-                    color: remaining < 0 ? 'error.main' : 'text.primary'
-                  }}>
-                    ${received.toFixed(2)}
-                  </Typography>
-                  <IconButton
-                    size="small"
-                    onClick={(e) => handleOpenMenu(e, income.id)}
-                  >
-                    <MoreVert />
-                  </IconButton>
-                </ListItem>
-              );
-            })}
-
-            {/* Total row - only show if there are incomes */}
-            {incomes.length > 0 && (
-              <ListItem
-                sx={{
-                  py: 1,
-                  borderBottom: '1px solid',
-                  borderColor: 'divider'
-                }}
-              >
-                <ListItemText primary="Total" />
-                <Box sx={{ 
-                  display: 'flex', 
-                  alignItems: 'center',
-                  minWidth: 400,
-                  justifyContent: 'space-between'
-                }}>
-                  <Typography sx={{ flex: 1, textAlign: 'right', fontWeight: 'bold' }}>
-                    ${totalPlanned.toFixed(2)}
-                  </Typography>
-                  <Typography sx={{ 
-                    flex: 1, 
-                    textAlign: 'right', 
-                    fontWeight: 'bold',
-                    color: (totalPlanned - totalReceived) < 0 ? 'error.main' : 'text.primary'
-                  }}>
-                    ${(totalPlanned - totalReceived).toFixed(2)}
-                  </Typography>
-                  <Box sx={{ width: 40 }} /> {/* Spacer for alignment */}
-                </Box>
-              </ListItem>
-            )}
-
-            {/* Add Income row */}
+        <List sx={{ py: 0 }}>
+          {currentBudget.incomes?.map(income => (
             <ListItem
+              key={income.id}
               sx={{
-                py: 1,
-                borderBottom: '1px solid',
-                borderColor: 'divider'
+                display: 'grid',
+                gridTemplateColumns: '1fr 120px 120px 40px',
+                gap: 1,
+                alignItems: 'center',
+                py: 0.5,
+                px: 1,
+                '&:hover': {
+                  backgroundColor: 'action.hover',
+                }
               }}
             >
-              <ListItemText 
-                primary={
-                  <Button
-                    startIcon={<Add />}
-                    onClick={() => handleEditIncome()}
-                    sx={{ ml: -1 }}
-                  >
-                    Add Income
-                  </Button>
-                }
-              />
-              <Box sx={{ width: 40 }} /> {/* Spacer for alignment with other rows */}
+              <Typography variant="body2" noWrap>
+                {income.name}
+              </Typography>
+              <Typography 
+                variant="body2" 
+                className="MuiTypography-amount" 
+                sx={{ textAlign: 'right' }}
+              >
+                ${income.amount.toFixed(2)}
+              </Typography>
+              <Typography 
+                variant="body2"
+                className="MuiTypography-remaining"
+                sx={{ 
+                  textAlign: 'right',
+                  color: income.amount - getIncomeReceived(income.id) < 0 ? 'error.main' : 'primary.main'
+                }}
+              >
+                ${getIncomeReceived(income.id).toFixed(2)}
+              </Typography>
+              <IconButton
+                size="small"
+                onClick={(e) => handleOpenMenu(e, income.id)}
+                sx={{ 
+                  color: 'text.secondary',
+                  p: 0.5
+                }}
+              >
+                <MoreVert fontSize="small" />
+              </IconButton>
             </ListItem>
-          </List>
-        </Box>
+          ))}
+
+          {/* Combined Total and Add Income row */}
+          <ListItem
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 120px 120px 40px',
+              gap: 1,
+              py: 0.5,
+              px: 1,
+              borderTop: 1,
+              borderColor: 'divider'
+            }}
+          >
+            <Button
+              startIcon={<Add />}
+              onClick={() => handleEditIncome()}
+              size="small"
+              sx={{ ml: -1 }}
+            >
+              Add Income
+            </Button>
+            <Typography 
+              variant="body2" 
+              className="MuiTypography-amount" 
+              sx={{ 
+                textAlign: 'right',
+                fontWeight: 600
+              }}
+            >
+              ${totalPlanned.toFixed(2)}
+            </Typography>
+            <Typography 
+              variant="body2"
+              className="MuiTypography-remaining"
+              sx={{ 
+                textAlign: 'right',
+                fontWeight: 600,
+                color: (totalPlanned - totalReceived) < 0 ? 'error.main' : 'primary.main'
+              }}
+            >
+              ${totalReceived.toFixed(2)}
+            </Typography>
+            <Box /> {/* Spacer for alignment */}
+          </ListItem>
+        </List>
       </Collapse>
 
       {/* Income Menu */}
@@ -275,7 +286,7 @@ function BudgetIncomeComponent({
       >
         <MenuItem 
           onClick={() => {
-            const income = incomes.find(i => i.id === menuAnchor.incomeId);
+            const income = currentBudget.incomes?.find(i => i.id === menuAnchor.incomeId);
             if (income) {
               handleEditIncome(income);
             }

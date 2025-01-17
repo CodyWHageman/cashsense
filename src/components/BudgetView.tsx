@@ -1,55 +1,39 @@
 import React, { useState } from 'react';
-import { Box, Tabs, Tab } from '@mui/material';
+import { Box, Tabs, Tab, Paper } from '@mui/material';
 import { Transaction } from '../models/Transaction';
 import { BudgetExpense, ExpenseCategory, BudgetIncome } from '../models/Budget';
 import BudgetSummary from './BudgetSummary';
 import TransactionHistory from './TransactionHistory';
-import TransactionImport from './TransactionImport';
 import ExpenseDetail from './ExpenseDetail';
-import { createTransaction, deleteTransaction } from '../services/transactionService';
+import { deleteTransaction } from '../services/transactionService';
 
 interface BudgetViewProps {
   expenses: BudgetExpense[];
   transactions: Transaction[];
-  importedTransactions: Transaction[];
-  setImportedTransactions: React.Dispatch<React.SetStateAction<Transaction[]>>;
   categories: ExpenseCategory[];
   incomes: BudgetIncome[];
-  onImportTransaction: (transaction: Transaction, importedId?: string) => void;
   onDeleteTransaction: (transactionId: string) => void;
   selectedExpense?: BudgetExpense | null;
   onExpenseDetailClose?: () => void;
   onExpenseClick?: (expense: BudgetExpense) => void;
+  onExpenseUpdate?: (updatedExpense: BudgetExpense) => void;
 }
 
-type TabValue = 'summary' | 'transactions' | 'import';
+type TabValue = 'summary' | 'transactions';
 
 function BudgetView({ 
   expenses = [], 
-  transactions = [],
-  importedTransactions = [],
-  setImportedTransactions,
   categories = [],
   incomes = [],
-  onImportTransaction,
   onDeleteTransaction,
   selectedExpense,
   onExpenseDetailClose = () => {},
-  onExpenseClick
+  onExpenseUpdate = () => {}
 }: BudgetViewProps) {
   const [currentTab, setCurrentTab] = useState<TabValue>('summary');
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: TabValue) => {
     setCurrentTab(newValue);
-  };
-
-  const handleImportTransaction = async (transaction: Transaction, importedId?: string) => {
-    try {
-      const newTransaction = await createTransaction(transaction);
-      onImportTransaction(newTransaction, importedId);
-    } catch (error) {
-      console.error('Error importing transaction:', error);
-    }
   };
 
   const handleDeleteTransaction = async (transactionId: string) => {
@@ -66,68 +50,65 @@ function BudgetView({
     return (
       <ExpenseDetail
         expense={selectedExpense}
-        transactions={transactions.filter(t => t.expenseId === selectedExpense.id)}
         category={category}
         onClose={onExpenseDetailClose}
         onDeleteTransaction={handleDeleteTransaction}
+        onExpenseUpdate={onExpenseUpdate}
       />
     );
   }
 
   return (
-    <Box>
-      <Tabs 
-        value={currentTab} 
-        onChange={handleTabChange}
-        sx={{ 
-          mb: 3,
-          borderBottom: '1px solid',
-          borderColor: 'divider'
-        }}
-      >
-        <Tab 
-          label="Summary" 
-          value="summary"
-          sx={{ textTransform: 'none' }}
-        />
-        <Tab 
-          label="Transactions" 
-          value="transactions"
-          sx={{ textTransform: 'none' }}
-        />
-        <Tab 
-          label="Import Transactions" 
-          value="import"
-          sx={{ textTransform: 'none' }}
-        />
-      </Tabs>
+    <Box sx={{ 
+      height: '100vh',
+      display: 'flex',
+      flexDirection: 'column'
+    }}>
+      <Paper className="budget-section" sx={{ flex: 1, overflowY: 'auto' }}>
+        <Tabs 
+          value={currentTab} 
+          onChange={handleTabChange}
+          sx={{ 
+            mb: 3,
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            position: 'sticky',
+            top: 0,
+            bgcolor: 'background.paper',
+            zIndex: 1
+          }}
+        >
+          <Tab 
+            label="Summary" 
+            value="summary"
+            sx={{ textTransform: 'none' }}
+          />
+          <Tab 
+            label="Transactions" 
+            value="transactions"
+            sx={{ textTransform: 'none' }}
+          />
+        </Tabs>
 
-      {currentTab === 'summary' && (
-        <BudgetSummary
-          expenses={expenses}
-          transactions={transactions}
-          incomes={incomes}
-          categories={categories}
-        />
-      )}
+        <Box sx={{ px: 2, pb: 2 }}>
+          {currentTab === 'summary' && (
+            <BudgetSummary
+              expenses={expenses}
+              incomes={incomes}
+              categories={categories}
+            />
+          )}
 
-      {currentTab === 'transactions' && (
-        <TransactionHistory
-          transactions={transactions}
-          categories={categories}
-          expenses={expenses}
-          onDeleteTransaction={handleDeleteTransaction}
-        />
-      )}
-
-      {currentTab === 'import' && (
-        <TransactionImport
-          onImportTransaction={handleImportTransaction}
-          importedTransactions={importedTransactions}
-          setImportedTransactions={setImportedTransactions}
-          existingTransactions={transactions}
-        />
-      )}
+          {currentTab === 'transactions' && (
+            <TransactionHistory
+              expenses={expenses}
+              incomes={incomes}
+              categories={categories}
+              onDeleteTransaction={handleDeleteTransaction}
+            />
+          )}
+        </Box>
+      </Paper>
     </Box>
   );
 }
