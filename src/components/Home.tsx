@@ -1,29 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box,
-  Grid,
   Typography,
   Button,
   Paper,
   CircularProgress,
   Container,
-  Tabs,
-  Tab,
   Popover,
   ButtonBase,
-  IconButton,
   Menu,
   MenuItem,
   Avatar,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
   Tooltip
 } from '@mui/material';
 import { Transaction } from '../models/Transaction';
-import { Budget, BudgetExpense, BudgetIncome, Fund } from '../models/Budget';
+import { Budget, BudgetCategory, BudgetExpense, BudgetIncome, Fund } from '../models/Budget';
 import BudgetCategories from './BudgetCategories';
 import BudgetView from './BudgetView';
 import BudgetIncomeComponent from './BudgetIncomeComponent';
@@ -226,12 +217,7 @@ function BudgetHome({ mode, toggleColorMode }: BudgetHomeProps) {
       const newBudget = await createBudget({
         month: getDatabaseMonth(selectedMonth),
         year: selectedYear,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        userId,
-        expenses: [],
-        incomes: [],
-        categories: []
+        userId
       });
 
       setCurrentBudget({
@@ -253,6 +239,17 @@ function BudgetHome({ mode, toggleColorMode }: BudgetHomeProps) {
     } catch (error) {
       console.error('Error updating expenses:', error);
       enqueueSnackbar('Error updating expenses', { variant: 'error' });
+    }
+  };
+
+  const handleUpdatedCategories = async (categories: BudgetCategory[]) => {
+    if (!currentBudget) return;
+    try {
+      const updatedBudget = { ...currentBudget, categories };
+      setCurrentBudget(updatedBudget);
+    } catch (error) {
+      console.error('Error updating categories:', error);
+      enqueueSnackbar('Error updating categories', { variant: 'error' });
     }
   };
 
@@ -656,10 +653,9 @@ function BudgetHome({ mode, toggleColorMode }: BudgetHomeProps) {
                         />
                       </Paper>
                       <BudgetCategories
-                        onExpensesChange={handleUpdatedExpenses}
                         currentBudget={currentBudget}
-                        setCurrentBudget={setCurrentBudget}
-                        addTransaction={handleImportTransaction}
+                        onExpensesChange={handleUpdatedExpenses}
+                        onCategoriesChange={handleUpdatedCategories}
                         onExpenseClick={setSelectedExpense}
                       />
                     </>

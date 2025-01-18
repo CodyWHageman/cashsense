@@ -1,7 +1,9 @@
 import { supabase } from './supabase';
-import { Budget, BudgetExpense, BudgetIncome, ExpenseCategory, BudgetCategory } from '../models/Budget';
+import { Budget, BudgetExpense, BudgetIncome, ExpenseCategory, BudgetCategory, BudgetCreateDTO, BudgetExpenseUpdateDTO, BudgetExpenseCreateDTO, BudgetIncomeCreateDTO } from '../models/Budget';
 import { getDatabaseMonth } from '../utils/dateUtils';
 import { Transaction } from '../models/Transaction';
+import { createExpenses } from './expenseService';
+import { createIncomes } from './incomeService';
 
 // Helper function to map transaction data
 const mapTransaction = (data: any): Transaction => ({
@@ -76,6 +78,24 @@ const mapBudget = (data: any): Budget => ({
   incomes: data.incomes ? data.incomes.map(mapIncome) : []
 });
 
+const mapCopiedExpenseToCreateDTO = (budgetId: string, expense: BudgetExpense): BudgetExpenseCreateDTO => ({
+  budgetId: budgetId,
+  categoryId: expense.categoryId,
+  name: expense.name,
+  amount: expense.amount,
+  dueDate: expense.dueDate ? new Date(expense.dueDate) : null,
+  sequenceNumber: expense.sequenceNumber,
+  fundId: expense.fundId
+});
+
+const mapCopiedIncomeToCreateDTO = (budgetId: string, income: BudgetIncome): BudgetIncomeCreateDTO => ({
+  budgetId: budgetId,
+  name: income.name,
+  amount: income.amount,
+  frequency: income.frequency,
+  expectedDate: income.expectedDate ? new Date(income.expectedDate) : null
+});
+
 // Get budget by month and year
 export const getBudgetByMonthAndYear = async (month: number, year: number, userId: string): Promise<Budget | null> => {
   const { data, error } = await supabase
@@ -112,11 +132,18 @@ export const getMostRecentBudget = async (month: number, year: number, userId: s
     .from('budgets')
     .select(`
       *,
-      budget_categories(
-        category:expense_categories(*)
+      categories:budget_categories(
+        *,
+        category:expense_categories!inner(*)
       ),
-      expenses:budget_expenses(*),
-      incomes:budget_incomes(*)
+      expenses:budget_expenses(
+        *,
+        transactions(*)
+      ),
+      incomes:budget_incomes(
+        *,
+        transactions(*)
+      )
     `)
     .eq('user_id', userId)
     .or(`year.lt.${year},and(year.eq.${year},month.lt.${month})`)
@@ -125,54 +152,41 @@ export const getMostRecentBudget = async (month: number, year: number, userId: s
     .limit(1)
     .single();
 
-  // If no budget is found, return null without throwing an error
   if (error?.details?.includes('The result contains 0 rows')) {
     return null;
   }
-
-  // For any other errors, throw them
   if (error) throw error;
-  
-  if (data) {
-    // Transform the nested category data
-    const categories = data.budget_categories?.map((bc: any) => bc.category) || [];
-    return { ...data, categories };
-  }
-  console.log('Most Recent Budget', data);
-  return null;
+
+  return data ? mapBudget(data) : null;
 };
 
 // Create a new budget
-export const createBudget = async (budget: Omit<Budget, 'id'>): Promise<Budget> => {
-  // Start a transaction
+export const createBudget = async (budget: BudgetCreateDTO): Promise<Budget> => {
   const { data: newBudget, error: budgetError } = await supabase
     .from('budgets')
     .insert([{
-      month: budget.month, // Month is now already in database format (1-12)
+      month: budget.month,
       year: budget.year,
       user_id: budget.userId,
-      created_at: budget.createdAt,
-      updated_at: budget.updatedAt
+      created_at: new Date(),
+      updated_at: new Date()
     }])
     .select('*')
     .single();
 
   if (budgetError) throw budgetError;
 
-  // Get the most recent budget to copy data from
   const recentBudget = await getMostRecentBudget(budget.month, budget.year, budget.userId);
-
   // If we have a recent budget and it has data, copy it
   if (recentBudget?.categories?.length || recentBudget?.expenses?.length || recentBudget?.incomes?.length) {
     try {
       // Copy categories if they exist
       if (recentBudget.categories && recentBudget.categories.length > 0) {
-        const categoryAssociations = recentBudget.categories.map(category => ({
+        const categoryAssociations = recentBudget.categories.map(budgetCategory => ({
           budget_id: newBudget.id,
-          category_id: category.id,
+          category_id: budgetCategory.category.id,
           created_at: new Date()
         }));
-
         const { error: categoriesError } = await supabase
           .from('budget_categories')
           .insert(categoryAssociations);
@@ -182,36 +196,14 @@ export const createBudget = async (budget: Omit<Budget, 'id'>): Promise<Budget> 
 
       // Copy expenses if they exist
       if (recentBudget.expenses && recentBudget.expenses.length > 0) {
-        const newExpenses = recentBudget.expenses.map(expense => ({
-          ...expense,
-          id: undefined,
-          budget_id: newBudget.id,
-          created_at: new Date(),
-          updated_at: new Date()
-        }));
-
-        const { error: expensesError } = await supabase
-          .from('budget_expenses')
-          .insert(newExpenses);
-
-        if (expensesError) throw expensesError;
+        const expenseCreateList = recentBudget.expenses.map(expense => mapCopiedExpenseToCreateDTO(newBudget.id, expense));
+        await createExpenses(expenseCreateList);
       }
 
       // Copy incomes if they exist
       if (recentBudget.incomes && recentBudget.incomes.length > 0) {
-        const newIncomes = recentBudget.incomes.map(income => ({
-          ...income,
-          id: undefined,
-          budget_id: newBudget.id,
-          created_at: new Date(),
-          updated_at: new Date()
-        }));
-
-        const { error: incomesError } = await supabase
-          .from('budget_incomes')
-          .insert(newIncomes);
-
-        if (incomesError) throw incomesError;
+        const incomeCreateList = recentBudget.incomes.map(income => mapCopiedIncomeToCreateDTO(newBudget.id, income));
+        await createIncomes(incomeCreateList);
       }
 
       // Return the complete budget with copied data
@@ -259,34 +251,6 @@ export const deleteBudget = async (id: string): Promise<void> => {
   if (error) throw error;
 };
 
-// Get all budgets for a user
-// export const getUserBudgets = async (userId: string): Promise<Budget[]> => {
-//   const { data, error } = await supabase
-//     .from('budgets')
-//     .select(`
-//       *,
-//       budget_categories!inner(
-//         category:expense_categories(*)
-//       ),
-//       expenses:budget_expenses(*),
-//       incomes:budget_incomes(*)
-//     `)
-//     .eq('user_id', userId)
-//     .order('year', { ascending: false })
-//     .order('month', { ascending: false });
-
-//   if (error) throw error;
-
-//   if (data) {
-//     // Transform the nested category data for each budget
-//     return data.map(budget => ({
-//       ...budget,
-//       categories: budget.budget_categories.map((bc: any) => bc.category)
-//     }));
-//   }
-
-//   return [];
-// };
 
 // Get current budget for the selected month/year
 export const getCurrentBudget = async (userId: string): Promise<Budget | null> => {

@@ -12,6 +12,12 @@ export interface Budget {
   categories?: BudgetCategory[];
 }
 
+export interface BudgetCreateDTO {
+  month: number;
+  year: number;
+  userId: string;
+}
+
 export interface BudgetExpense {
   id: string;
   budgetId: string;
@@ -26,16 +32,49 @@ export interface BudgetExpense {
   transactions?: Transaction[];
 }
 
+export interface BudgetExpenseCreateDTO {
+  name: string;
+  amount: number;
+  budgetId: string;
+  categoryId: string;
+  dueDate: Date | null;
+  fundId?: string | null;
+  sequenceNumber: number;
+}
+
+export interface BudgetExpenseUpdateDTO {
+  name: string;
+  amount: number;
+  dueDate: Date | null;
+  fundId?: string | null;
+  sequenceNumber: number;
+}
+
 export interface BudgetIncome {
   id: string;
   budgetId: string;
   name: string;
   amount: number;
   frequency: 'monthly' | 'weekly' | 'bi-weekly';
-  expectedDate: Date;
+  expectedDate: Date | null;
   createdAt: Date;
   updatedAt: Date;
   transactions?: Transaction[];
+}
+
+export interface BudgetIncomeCreateDTO {
+  name: string;
+  amount: number;
+  budgetId: string;
+  frequency: 'monthly' | 'weekly' | 'bi-weekly';
+  expectedDate: Date | null;
+}
+
+export interface BudgetIncomeUpdateDTO {
+  name: string;
+  amount: number;
+  frequency: 'monthly' | 'weekly' | 'bi-weekly';
+  expectedDate: Date | null;
 }
 
 export interface ExpenseCategory {

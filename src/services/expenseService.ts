@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { BudgetExpense } from '../models/Budget';
+import { BudgetExpense, BudgetExpenseCreateDTO, BudgetExpenseUpdateDTO } from '../models/Budget';
 import { createFundTransaction } from './fundService';
 
 // Helper function to map database fields to camelCase
@@ -16,22 +16,31 @@ const mapExpense = (data: any): BudgetExpense => ({
   sequenceNumber: data.sequence_number
 });
 
+const mapCreateDTOToDBExpense = (expense: BudgetExpenseCreateDTO): any => ({
+  name: expense.name,
+  amount: expense.amount,
+  due_date: expense.dueDate,
+  category_id: expense.categoryId,
+  fund_id: expense.fundId,
+  budget_id: expense.budgetId,
+  sequence_number: expense.sequenceNumber
+});
+
+const mapUpdateDTOToDBExpense = (expense: BudgetExpenseUpdateDTO): any => ({
+  name: expense.name,
+  amount: expense.amount,
+  due_date: expense.dueDate,
+  fund_id: expense.fundId,
+  sequence_number: expense.sequenceNumber,
+  created_at: new Date(),
+  updated_at: new Date()
+});
+
 // Create a new expense
-export const createExpense = async (expense: Omit<BudgetExpense, 'id'>): Promise<BudgetExpense> => {
-  console.log('createExpense', expense);
+export const createExpense = async (expense: BudgetExpenseCreateDTO): Promise<BudgetExpense> => {
   const { data, error } = await supabase
     .from('budget_expenses')
-    .insert([{
-        name: expense.name,
-        amount: expense.amount,
-        due_date: expense.dueDate,
-        category_id: expense.categoryId,
-        fund_id: expense.fundId,
-        budget_id: expense.budgetId,
-        created_at: new Date(),
-        updated_at: new Date(),
-        sequence_number: expense.sequenceNumber
-    }])
+    .insert([mapCreateDTOToDBExpense(expense)])
     .select()
     .single();
 
@@ -39,31 +48,25 @@ export const createExpense = async (expense: Omit<BudgetExpense, 'id'>): Promise
   return mapExpense(data);
 };
 
-// Get all expenses for a budget
-export const getBudgetExpenses = async (budgetId: string): Promise<BudgetExpense[]> => {
-  const { data, error } = await supabase
+export const createExpenses = async (expenses: BudgetExpenseCreateDTO[]): Promise<BudgetExpense[]> => {
+    console.log('Creating expenses:', expenses);
+    const { data, error } = await supabase
     .from('budget_expenses')
-    .select(`
-      *,
-      transactions(*)
-    `)
-    .eq('budget_id', budgetId);
+    .insert(expenses.map(mapCreateDTOToDBExpense))
+    .select();
 
   if (error) throw error;
-  return (data || []).map(mapExpense);
-};
+  return data.map(mapExpense);
+};  
 
 // Update an expense
-export const updateExpense = async (id: string, updates: Partial<BudgetExpense>): Promise<BudgetExpense> => {
+export const updateExpense = async (id: string, updates: BudgetExpenseUpdateDTO): Promise<BudgetExpense> => {
+  const expenseUpdates = mapUpdateDTOToDBExpense(updates);
   const { data, error } = await supabase
     .from('budget_expenses')
     .update({
-        name: updates.name,
-        amount: updates.amount,
-        due_date: updates.dueDate,
-        fund_id: updates.fundId,
-        updated_at: new Date(),
-        sequence_number: updates.sequenceNumber
+        ...expenseUpdates,
+        updated_at: new Date()
     })
     .eq('id', id)
     .select()
@@ -81,6 +84,20 @@ export const deleteExpense = async (id: string): Promise<void> => {
     .eq('id', id);
 
   if (error) throw error;
+};
+
+// Get all expenses for a budget
+export const getBudgetExpenses = async (budgetId: string): Promise<BudgetExpense[]> => {
+  const { data, error } = await supabase
+    .from('budget_expenses')
+    .select(`
+      *,
+      transactions(*)
+    `)
+    .eq('budget_id', budgetId);
+
+  if (error) throw error;
+  return (data || []).map(mapExpense);
 };
 
 // Add a transaction to an expense
