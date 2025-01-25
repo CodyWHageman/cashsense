@@ -392,3 +392,77 @@ CREATE TRIGGER set_import_templates_updated_at
   BEFORE UPDATE ON import_templates
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column(); 
+
+CREATE TABLE split_transactions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  parent_transaction_id UUID REFERENCES transactions(id) ON DELETE CASCADE,
+  split_amount DECIMAL(10,2) NOT NULL,
+  expense_id UUID REFERENCES budget_expenses(id) ON DELETE RESTRICT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Add index for efficient lookups
+CREATE INDEX idx_split_transactions_parent ON split_transactions(parent_transaction_id);
+
+-- Enable RLS on split_transactions table
+ALTER TABLE split_transactions ENABLE ROW LEVEL SECURITY;
+
+-- Create policies for split_transactions table
+CREATE POLICY "Users can view their own split transactions" ON split_transactions
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM transactions t
+      JOIN budget_expenses e ON t.expense_id = e.id
+      JOIN budgets b ON e.budget_id = b.id
+      WHERE t.id = split_transactions.parent_transaction_id
+      AND b.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Users can create split transactions for their own transactions" ON split_transactions
+  FOR INSERT WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM transactions t
+      JOIN budget_expenses e ON t.expense_id = e.id
+      JOIN budgets b ON e.budget_id = b.id
+      WHERE t.id = split_transactions.parent_transaction_id
+      AND b.user_id = auth.uid()
+    )
+    AND
+    EXISTS (
+      SELECT 1 FROM budget_expenses e
+      JOIN budgets b ON e.budget_id = b.id
+      WHERE e.id = split_transactions.expense_id
+      AND b.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Users can update their own split transactions" ON split_transactions
+  FOR UPDATE USING (
+    EXISTS (
+      SELECT 1 FROM transactions t
+      JOIN budget_expenses e ON t.expense_id = e.id
+      JOIN budgets b ON e.budget_id = b.id
+      WHERE t.id = split_transactions.parent_transaction_id
+      AND b.user_id = auth.uid()
+    )
+  ) WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM budget_expenses e
+      JOIN budgets b ON e.budget_id = b.id
+      WHERE e.id = split_transactions.expense_id
+      AND b.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Users can delete their own split transactions" ON split_transactions
+  FOR DELETE USING (
+    EXISTS (
+      SELECT 1 FROM transactions t
+      JOIN budget_expenses e ON t.expense_id = e.id
+      JOIN budgets b ON e.budget_id = b.id
+      WHERE t.id = split_transactions.parent_transaction_id
+      AND b.user_id = auth.uid()
+    )
+  );

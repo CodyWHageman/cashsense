@@ -85,6 +85,17 @@ export interface ExpenseCategory {
   userId: string;
 }
 
+export interface ExpenseCategoryCreateDTO {
+  name: string;
+  color: string;
+  userId: string;
+}
+
+export interface ExpenseCategoryUpdateDTO {
+  name: string;
+  color: string;
+}
+
 export interface BudgetCategory {
   id: string;
   budgetId: string;

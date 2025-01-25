@@ -8,7 +8,7 @@ interface LoomVideoProps {
   marginBottom?: number;
 }
 
-export function LoomVideo({ 
+function LoomVideo({ 
   videoId, 
   sessionId, 
   aspectRatio = '16:9',
@@ -56,3 +56,5 @@ export function LoomVideo({
     </Box>
   );
 } 
+
+export default LoomVideo; 

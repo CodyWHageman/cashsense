@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { Fund } from '../models/Budget';
-import { Transaction, FundTransaction } from '../models/Transaction';
+import { Transaction, FundTransaction, FundTransactionCreateDTO } from '../models/Transaction';
 
 // Helper functions to map database fields to camelCase
 const mapTransaction = (data: any): Transaction => ({
@@ -156,6 +156,14 @@ export const createFundTransaction = async (
 
   if (error) throw error;
 };
+
+export const createFundTransactions = async (fundTransactions: FundTransactionCreateDTO[]): Promise<void> => {
+  const { error } = await supabase
+    .from('fund_transactions')
+    .insert(fundTransactions.map(mapFundTransaction));
+
+  if (error) throw error;
+};  
 
 // Update fund transaction transfer status
 export const updateFundTransactionStatus = async (

@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { BudgetCategory, ExpenseCategory } from '../models/Budget';
+import { BudgetCategory, ExpenseCategory, ExpenseCategoryCreateDTO, ExpenseCategoryUpdateDTO } from '../models/Budget';
 
 // Helper functions to map database fields to camelCase
 const mapExpenseCategory = (data: any): ExpenseCategory => ({
@@ -21,18 +21,17 @@ const mapBudgetCategory = (data: any): BudgetCategory => ({
 
 // Create a new category and associate it with a budget
 export const createCategory = async (
-  category: Omit<ExpenseCategory, 'id'>,
+  newCategory: ExpenseCategoryCreateDTO,
   budgetId: string,
   sequenceNumber: number
 ): Promise<BudgetCategory> => {
   // Insert the category
-  console.log('Creating category', category);
   const { data: categoryData, error: categoryError } = await supabase
     .from('expense_categories')
     .insert([{
-      name: category.name,
-      color: category.color,
-      user_id: category.userId,
+      name: newCategory.name,
+      color: newCategory.color,
+      user_id: newCategory.userId,
       created_at: new Date()
     }])
     .select()
@@ -56,21 +55,21 @@ export const createCategory = async (
     .single();
 
   if (associationError) throw associationError;
-  
+
   return mapBudgetCategory(associationData);
 };
 
 // Update a category
 export const updateExpenseCategory = async (
   id: string,
-  updates: Partial<ExpenseCategory>
+  { name, color }: ExpenseCategoryUpdateDTO
 ): Promise<ExpenseCategory> => {
   const { data, error } = await supabase
     .from('expense_categories')
     .update({
-      name: updates.name,
-      color: updates.color,
-      updated_at: new Date() 
+      name,
+      color,
+      updated_at: new Date()
     })
     .eq('id', id)
     .select()
@@ -81,11 +80,48 @@ export const updateExpenseCategory = async (
 };
 
 // Delete a category
-export const deleteCategory = async (id: string): Promise<void> => {
-  const { error } = await supabase
-    .from('expense_categories')
-    .delete()
-    .eq('id', id);
+export const deleteCategory = async (id: string, budgetId: string): Promise<void> => {
+  console.log('Deleting category', id, 'for budget', budgetId);
+  // Check if expenses exist for this category and budget
+  const { data: expenses, error: expensesError } = await supabase
+    .from('budget_expenses')
+    .select('id')
+    .eq('category_id', id)
+    .eq('budget_id', budgetId);
 
-  if (error) throw error;
-}; 
+  if (expensesError) throw expensesError;
+
+  if (expenses.length > 0) {
+    throw new Error('Cannot delete category with associated expenses');
+  }
+
+  const { error: budgetCategoryError } = await supabase
+    .from('budget_categories')
+    .delete()
+    .eq('category_id', id)
+    .eq('budget_id', budgetId);
+
+  if (budgetCategoryError) throw budgetCategoryError;
+
+  //Check if category exists in other budgets
+  deleteExpenseCategoryIfNotInOtherBudgets(id);
+};
+
+const deleteExpenseCategoryIfNotInOtherBudgets = async (expenseCategoryId: string) => {
+  const { data: otherBudgets, error: otherBudgetsError } = await supabase
+    .from('budget_categories')
+    .select('id')
+    .eq('category_id', expenseCategoryId);
+
+  if (otherBudgetsError) throw otherBudgetsError;
+
+  if (otherBudgets.length < 1) {
+    //Delete category
+    const { error: categoryError } = await supabase
+      .from('expense_categories')
+      .delete()
+      .eq('id', expenseCategoryId);
+
+    if (categoryError) throw categoryError;
+  }
+}

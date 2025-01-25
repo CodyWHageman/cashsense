@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
-import { Transaction } from '../models/Transaction';
+import { SplitTransaction, Transaction, TransactionCreateDTO, TransactionSplitDTO } from '../models/Transaction';
+import { generateHashId } from '../utils/transactionUtils';
 
 // Helper function to map database fields to camelCase
 const mapTransaction = (data: any): Transaction => ({
@@ -14,25 +15,56 @@ const mapTransaction = (data: any): Transaction => ({
   updatedAt: data.updated_at ? new Date(data.updated_at) : undefined
 });
 
-// Create a new transaction
-export const createTransaction = async (transaction: Omit<Transaction, 'id'>): Promise<Transaction> => {
+const mapCreateDTOToDB = (transaction: TransactionCreateDTO): any => ({
+  amount: transaction.amount,
+  date: transaction.date,
+  description: transaction.description,
+  expense_id: transaction.expenseId,
+  income_id: transaction.incomeId,
+  hash_id: transaction.hashId,
+  created_at: new Date(),
+  updated_at: new Date()
+});
+
+/**
+ * Creates a new transaction with the amount as an absolute value.
+ * Determines the transaction type based on associated expense or income.
+ */
+export const createTransaction = async (transaction: TransactionCreateDTO): Promise<Transaction> => {
+  // Ensure the amount is absolute
+  const absoluteTransaction = ensureAbsoluteAmount(transaction);
+
   const { data, error } = await supabase
     .from('transactions')
-    .insert([{
-      hash_id: transaction.hashId,
-      amount: transaction.amount,
-      date: transaction.date,
-      description: transaction.description,
-      expense_id: transaction.expenseId,
-      income_id: transaction.incomeId,
-      created_at: new Date(),
-      updated_at: new Date()
-    }])
+    .insert([mapCreateDTOToDB(absoluteTransaction)])
     .select()
     .single();
 
   if (error) throw error;
   return mapTransaction(data);
+};
+
+export const createTransactions = async (transactions: TransactionCreateDTO[]): Promise<Transaction[]> => {
+  // Ensure the amount is absolute
+  const absoluteTransactions = transactions.map(transaction => ensureAbsoluteAmount(transaction));
+
+  const { data, error } = await supabase
+    .from('transactions')
+    .insert(transactions.map(mapCreateDTOToDB))
+    .select();
+
+  if (error) throw error;
+  return (data || []).map(mapTransaction);
+};
+
+const ensureAbsoluteAmount = (transaction: TransactionCreateDTO): TransactionCreateDTO => {
+  const absoluteAmount = Math.abs(transaction.amount);  
+  const hashId = generateHashId(absoluteAmount, transaction.date, transaction.description);
+  return {
+    ...transaction,
+    amount: absoluteAmount,
+    hashId
+  };
 };
 
 // Get all transactions for a budget
@@ -77,26 +109,6 @@ export const deleteTransaction = async (id: string): Promise<void> => {
   if (error) throw error;
 };
 
-// Batch create transactions
-export const createTransactions = async (transactions: Omit<Transaction, 'id'>[]): Promise<Transaction[]> => {
-  const { data, error } = await supabase
-    .from('transactions')
-    .insert(transactions.map(t => ({
-      hash_id: t.hashId,
-      amount: t.amount,
-      date: t.date,
-      description: t.description,
-      expense_id: t.expenseId,
-      income_id: t.incomeId,
-      created_at: new Date(),
-      updated_at: new Date()
-    })))
-    .select();
-
-  if (error) throw error;
-  return (data || []).map(mapTransaction);
-};
-
 export const checkExistingHashIds = async (hashIds: string[]): Promise<string[]> => {
   const { data, error } = await supabase
     .from('transactions')
@@ -106,3 +118,60 @@ export const checkExistingHashIds = async (hashIds: string[]): Promise<string[]>
   if (error) throw error;
   return (data || []).map(t => t.hash_id);
 };
+
+// Add to src/services/transactionService.ts
+export const splitTransaction = async (transactionSplit: TransactionSplitDTO): Promise<Transaction> => {
+  // Start a Supabase transaction
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  try {
+    // 1. Get the original transaction
+    const { data: parentTransaction, error: fetchError } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('id', transactionSplit.parentTransactionId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    // 2. Create split transaction records
+    const { data: splits, error: splitError } = await supabase
+      .from('split_transactions')
+      .insert(
+        transactionSplit.splits.map(split => ({
+          parent_transaction_id: transactionSplit.parentTransactionId,
+          split_amount: split.amount,
+          expense_id: split.expenseId
+        }))
+      )
+      .select();
+
+    if (splitError) throw splitError;
+
+    // 3. Update the parent transaction to mark it as split
+    const { data: updatedTransaction, error: updateError } = await supabase
+      .from('transactions')
+      .update({ is_split: true })
+      .eq('id', transactionSplit.parentTransactionId)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+
+    return mapTransaction({
+      ...updatedTransaction,
+      splits: splits.map(mapDBDataToSplitTransaction)
+    });
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const mapDBDataToSplitTransaction = (data: any): SplitTransaction => ({
+  id: data.id,
+  parentTransactionId: data.parent_transaction_id,
+  splitAmount: data.split_amount,
+  expenseId: data.expense_id,
+  createdAt: new Date(data.created_at),
+  updatedAt: data.updated_at
+});

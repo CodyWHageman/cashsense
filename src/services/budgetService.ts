@@ -4,6 +4,7 @@ import { getDatabaseMonth } from '../utils/dateUtils';
 import { Transaction } from '../models/Transaction';
 import { createExpenses } from './expenseService';
 import { createIncomes } from './incomeService';
+import { mapDBDataToSplitTransaction } from './transactionService';
 
 // Helper function to map transaction data
 const mapTransaction = (data: any): Transaction => ({
@@ -15,7 +16,9 @@ const mapTransaction = (data: any): Transaction => ({
   expenseId: data.expense_id,
   incomeId: data.income_id,
   createdAt: new Date(data.created_at),
-  updatedAt: data.updated_at ? new Date(data.updated_at) : undefined
+  updatedAt: data.updated_at ? new Date(data.updated_at) : undefined,
+  splits: data.splits ? data.splits.map(mapDBDataToSplitTransaction) : [],
+  isSplit: data.splits && data.splits.length > 0
 });
 
 // Helper function to map expense category
@@ -108,7 +111,10 @@ export const getBudgetByMonthAndYear = async (month: number, year: number, userI
       ),
       expenses:budget_expenses(
         *,
-        transactions(*)
+        transactions(
+          *,
+          splits:split_transactions(*)
+        )
       ),
       incomes:budget_incomes(
         *,
@@ -122,6 +128,8 @@ export const getBudgetByMonthAndYear = async (month: number, year: number, userI
 
   if (error?.details?.includes('The result contains 0 rows')) return null;
   if (error) throw error;
+
+  console.log("budget data", data);
 
   return data ? mapBudget(data) : null;
 };
@@ -138,7 +146,10 @@ export const getMostRecentBudget = async (month: number, year: number, userId: s
       ),
       expenses:budget_expenses(
         *,
-        transactions(*)
+        transactions(
+          *,
+          splits:split_transactions(*)
+        )
       ),
       incomes:budget_incomes(
         *,
