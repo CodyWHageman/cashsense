@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { BudgetIncome } from '../models/Budget';
+import { BudgetIncome, BudgetIncomeCreateDTO } from '../models/Budget';
 
 // Helper function to map database fields to camelCase
 const mapIncome = (data: any): BudgetIncome => ({
@@ -13,26 +13,39 @@ const mapIncome = (data: any): BudgetIncome => ({
   updatedAt: data.updated_at
 });
 
+const mapCreateDTOToDBInsert = (income: BudgetIncomeCreateDTO): any => ({
+  name: income.name,
+  amount: income.amount,
+  frequency: income.frequency,
+  expected_date: income.expectedDate,
+  budget_id: income.budgetId,
+  created_at: new Date(),
+  updated_at: new Date()
+});
+
 // Create a new income
-export const createIncome = async (income: Omit<BudgetIncome, 'id'>): Promise<BudgetIncome> => {
+export const createIncome = async (income: BudgetIncomeCreateDTO): Promise<BudgetIncome> => {
     console.log('Creating income:', income);
     const { data, error } = await supabase
     .from('budget_incomes')
-    .insert([{
-      name: income.name,
-      amount: income.amount,
-      frequency: income.frequency,
-      expected_date: income.expectedDate,
-      budget_id: income.budgetId,
-      created_at: new Date(),
-      updated_at: new Date()
-    }])
+    .insert([mapCreateDTOToDBInsert(income)])
     .select()
     .single();
 
   if (error) throw error;
   return mapIncome(data);
 };
+
+export const createIncomes = async (incomes: BudgetIncomeCreateDTO[]): Promise<BudgetIncome[]> => {
+    console.log('Creating incomes:', incomes);
+    const { data, error } = await supabase
+    .from('budget_incomes')
+    .insert(incomes.map(mapCreateDTOToDBInsert))
+    .select();
+
+  if (error) throw error;
+  return data.map(mapIncome);
+};  
 
 // Get all incomes for a budget
 export const getBudgetIncomes = async (budgetId: string): Promise<BudgetIncome[]> => {
