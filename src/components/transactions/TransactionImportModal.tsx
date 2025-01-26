@@ -26,7 +26,7 @@ import {
   SwipeableDrawer,
   useTheme
 } from '@mui/material';
-import { Close, Delete, CloudUpload } from '@mui/icons-material';
+import { Close, Delete } from '@mui/icons-material';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { Transaction, TransactionCreateDTO } from '../../models/Transaction';
 import { BudgetExpense, BudgetIncome, Fund } from '../../models/Budget';
@@ -36,9 +36,9 @@ import { fromCSV, fromTemplate, generateHashId } from '../../utils/transactionUt
 import { useAuth } from '../../contexts/AuthContext';
 import { getImportTemplates } from '../../services/importTemplateService';
 import { useResponsive } from '../../hooks/useResponsive';
-import { useDropzone } from 'react-dropzone';
 import { ExpenseSearchBox } from '../budget/ExpenseSearchBox';
 import { calculateFundBalance } from '../../utils/fundUtils';
+import { FileDropZone } from '../common/FileDropZone';
 
 interface ImportTemplate {
   id: string;
@@ -142,31 +142,6 @@ export default function TransactionImportModal({
   const theme = useTheme();
   const [currentTab, setCurrentTab] = useState(0);
   const [parsedTransactions, setParsedTransactions] = useState<Transaction[]>([]);
-
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      processFile(file);
-    }
-  };
-
-  const handleFileDrop = async (acceptedFiles: File[]) => {
-    const file = acceptedFiles[0];
-    if (file) {
-      processFile(file);
-    }
-  };
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop: handleFileDrop,
-    accept: {
-      'text/csv': ['.csv'],
-      'application/json': ['.json']
-    },
-    noClick: false,
-    preventDropOnDocument: true,
-    multiple: false
-  });
 
   useEffect(() => {
     setInternalOpen(open);
@@ -544,30 +519,20 @@ export default function TransactionImportModal({
               </Select>
             </FormControl>
 
-            <Box
-              {...getRootProps()}
-              onClick={(e) => e.stopPropagation()}
-              sx={{
-                border: `2px dashed ${theme.palette.divider}`,
-                borderRadius: 1,
-                p: 3,
-                textAlign: 'center',
-                cursor: 'pointer',
-                bgcolor: isDragActive ? 'action.hover' : 'transparent',
-                '&:hover': {
-                  bgcolor: 'action.hover'
+            <FileDropZone
+              onFileSelect={(file) => {
+                if (!selectedTemplate) {
+                  enqueueSnackbar('Please select an import template first', { variant: 'error' });
+                  return;
                 }
+                processFile(file);
               }}
-            >
-              <input {...getInputProps()} />
-              <CloudUpload sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-              <Typography>
-                {isDragActive ? 'Drop the file here' : 'Drag & drop files here, or click to select'}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                Supports CSV and JSON files
-              </Typography>
-            </Box>
+              accept={{
+                'text/csv': ['.csv'],
+                'application/json': ['.json']
+              }}
+              helperText="Supports CSV and JSON files"
+            />
           </>
         ) : (
           <DragDropContext onDragEnd={handleDragEnd}>
@@ -808,7 +773,11 @@ export default function TransactionImportModal({
                             type="file"
                             hidden
                             accept={`.${templates.find(t => t.id === selectedTemplate)?.fileType.toLowerCase()}`}
-                            onChange={handleFileSelect}
+                            onChange={(e) => {
+                              if (e.target.files) {
+                                processFile(e.target.files[0]);
+                              }
+                            }}
                           />
                         </Button>
                       </>
@@ -878,7 +847,11 @@ export default function TransactionImportModal({
                             type="file"
                             hidden
                             accept={`.${templates.find(t => t.id === selectedTemplate)?.fileType.toLowerCase()}`}
-                            onChange={handleFileSelect}
+                            onChange={(e) => {
+                              if (e.target.files) {
+                                processFile(e.target.files[0]);
+                              }
+                            }}
                           />
                         </Button>
                         <Button

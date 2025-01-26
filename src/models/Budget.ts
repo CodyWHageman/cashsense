@@ -1,4 +1,4 @@
-import { FundTransaction, Transaction } from "./Transaction";
+import { FundTransaction, SplitTransaction, Transaction } from "./Transaction";
 
 export interface Budget {
   id: string;
@@ -30,6 +30,7 @@ export interface BudgetExpense {
   updatedAt: Date;
   sequenceNumber: number;
   transactions?: Transaction[];
+  splitTransactions?: SplitTransaction[];
 }
 
 export interface BudgetExpenseCreateDTO {

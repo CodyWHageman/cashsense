@@ -10,6 +10,7 @@ import { MainLayout } from './components/layout/MainLayout';
 const BudgetPage = React.lazy(() => import('./components/pages/BudgetPage'));
 const FundPage = React.lazy(() => import('./components/pages/FundPage'));
 const Login = React.lazy(() => import('./components/auth/Login'));
+const ResetPassword = React.lazy(() => import('./components/auth/ResetPassword'));
 const Signup = React.lazy(() => import('./components/auth/Signup'));
 const SettingsPage = React.lazy(() => import('./components/pages/SettingsPage'));
 const HelpPage = React.lazy(() => import('./components/pages/HelpPage'));
@@ -54,6 +55,7 @@ function App() {
             <Suspense fallback={<LoadingFallback />}>
               <Routes>
                 <Route path="/login" element={<Login />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/signup" element={<Signup />} />
                 
                 <Route path="/" element={
