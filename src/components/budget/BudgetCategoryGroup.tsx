@@ -175,9 +175,9 @@ const BudgetCategoryGroup: React.FC<BudgetCategoryGroupProps> = ({
   };
 
   const totalSpent = expenses.reduce((sum, expense) => {
-    // Since transactions are absolute, treat them based on relationship
-    const expenseSpent = expense.transactions?.reduce((tSum, t) => tSum + t.amount, 0) || 0;
-    return sum + expenseSpent;
+    const transactionTotal = expense.transactions?.reduce((tSum, t) => tSum + t.amount, 0) || 0;
+    const splitTotal = expense.splitTransactions?.reduce((tSum, t) => tSum + t.splitAmount, 0) || 0;
+    return sum + transactionTotal + splitTotal;
   }, 0);
 
   const totalPlanned = expenses.reduce((sum, expense) => sum + expense.amount, 0);
@@ -252,7 +252,9 @@ const BudgetCategoryGroup: React.FC<BudgetCategoryGroupProps> = ({
                 >
                   {expenses.map((expense, index) => {
                     const isEditing = editingExpenseId === expense.id;
-                    const spent = expense.transactions?.reduce((sum, t) => sum + t.amount, 0) || 0;
+                    const transactionsSpent = expense.transactions?.reduce((sum, t) => sum + t.amount, 0) || 0;
+                    const splitSpent = expense.splitTransactions?.reduce((sum, t) => sum + t.splitAmount, 0) || 0;
+                    const spent = transactionsSpent + splitSpent;
                     const remaining = expense.amount - spent;
 
                     return (

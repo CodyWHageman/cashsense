@@ -1,9 +1,14 @@
 import { supabase } from './supabase';
-import { SplitTransaction, Transaction, TransactionCreateDTO, TransactionSplitDTO } from '../models/Transaction';
+import { ParentTransaction, SplitTransaction, Transaction, TransactionCreateDTO, TransactionSplitDTO } from '../models/Transaction';
 import { generateHashId } from '../utils/transactionUtils';
 
 // Helper function to map database fields to camelCase
-const mapTransaction = (data: any): Transaction => ({
+export const mapTransaction = (data: any): Transaction => ({
+  ...mapParentTransaction(data),
+  splits: data.splits ? data.splits.map(mapDBDataToSplitTransaction) : []
+});
+
+export const mapParentTransaction = (data: any): ParentTransaction => ({
   id: data.id,
   hashId: data.hash_id,
   amount: data.amount,
@@ -11,6 +16,7 @@ const mapTransaction = (data: any): Transaction => ({
   description: data.description,
   expenseId: data.expense_id,
   incomeId: data.income_id,
+  isSplit: data.is_split,
   createdAt: new Date(data.created_at),
   updatedAt: data.updated_at ? new Date(data.updated_at) : undefined
 });
@@ -125,16 +131,7 @@ export const splitTransaction = async (transactionSplit: TransactionSplitDTO): P
   const { data: { user } } = await supabase.auth.getUser();
   
   try {
-    // 1. Get the original transaction
-    const { data: parentTransaction, error: fetchError } = await supabase
-      .from('transactions')
-      .select('*')
-      .eq('id', transactionSplit.parentTransactionId)
-      .single();
-
-    if (fetchError) throw fetchError;
-
-    // 2. Create split transaction records
+    // 1. Create split transaction records
     const { data: splits, error: splitError } = await supabase
       .from('split_transactions')
       .insert(
@@ -148,10 +145,14 @@ export const splitTransaction = async (transactionSplit: TransactionSplitDTO): P
 
     if (splitError) throw splitError;
 
-    // 3. Update the parent transaction to mark it as split
+    // 2. Update the parent transaction to mark it as split
     const { data: updatedTransaction, error: updateError } = await supabase
       .from('transactions')
-      .update({ is_split: true })
+      .update({ 
+        expense_id: null,
+        income_id: null,
+        is_split: true 
+      })
       .eq('id', transactionSplit.parentTransactionId)
       .select()
       .single();
@@ -169,7 +170,7 @@ export const splitTransaction = async (transactionSplit: TransactionSplitDTO): P
 
 export const mapDBDataToSplitTransaction = (data: any): SplitTransaction => ({
   id: data.id,
-  parentTransactionId: data.parent_transaction_id,
+  parentTransaction: mapParentTransaction(data.parent_transaction),
   splitAmount: data.split_amount,
   expenseId: data.expense_id,
   createdAt: new Date(data.created_at),

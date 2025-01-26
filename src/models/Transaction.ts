@@ -1,15 +1,18 @@
-export interface Transaction {
+export interface Transaction extends ParentTransaction {
+  splits?: SplitTransaction[];
+}
+
+export interface ParentTransaction {
   id: string;
   hashId: string;
+  amount: number;
   date: Date;
   description: string;
-  amount: number;
-  incomeId?: string;
   expenseId?: string;
+  incomeId?: string;
   createdAt: Date;
   updatedAt?: Date;
-  splits?: SplitTransaction[];
-  isSplit?: boolean;
+  isSplit: boolean;
 }
 
 export interface TransactionCreateDTO {
@@ -43,9 +46,9 @@ export interface FundTransactionCreateDTO {
 
 export interface SplitTransaction {
   id: string;
-  parentTransactionId: string;
   splitAmount: number;
   expenseId: string;
+  parentTransaction: ParentTransaction;
   createdAt: Date;
   updatedAt: Date;
 }

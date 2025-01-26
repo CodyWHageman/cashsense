@@ -1,65 +1,46 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Button,
   TextField,
   Typography,
   Container,
-  Link,
   Paper,
   CircularProgress
 } from '@mui/material';
-import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSnackbar } from 'notistack';
 import logo from '../../../images/cashsense-small.png';
 
-const Login: React.FC = () => {
-  const [email, setEmail] = useState('');
+function ResetPassword() {
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [isResetting, setIsResetting] = useState(false);
-  const { signIn, user, loading, resetPassword } = useAuth();
+  const { updatePassword, loading } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
   const { enqueueSnackbar } = useSnackbar();
-
-  useEffect(() => {
-    if (user && !loading) {
-      const from = location.state?.from?.pathname || '/';
-      navigate(from, { replace: true });
-    }
-  }, [user, loading, navigate, location]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      await signIn(email, password);
-    } catch (error) {
-      enqueueSnackbar('Failed to sign in. Please check your credentials.', { 
-        variant: 'error' 
-      });
-    }
-  };
 
-  const handleForgotPassword = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    if (!email) {
-      enqueueSnackbar('Please enter your email address', { variant: 'warning' });
+    if (password !== confirmPassword) {
+      enqueueSnackbar('Passwords do not match', { variant: 'error' });
+      return;
+    }
+
+    if (password.length < 6) {
+      enqueueSnackbar('Password must be at least 6 characters', { variant: 'error' });
       return;
     }
 
     try {
       setIsResetting(true);
-      await resetPassword(email);
-      enqueueSnackbar(
-        'Password reset link has been sent to your email',
-        { variant: 'success' }
-      );
+      await updatePassword(password);
+      enqueueSnackbar('Password successfully reset', { variant: 'success' });
+      navigate('/login', { replace: true });
     } catch (error) {
-      enqueueSnackbar(
-        'Failed to send reset link. Please try again.',
-        { variant: 'error' }
-      );
+      enqueueSnackbar('Failed to reset password. Please try again.', { variant: 'error' });
     } finally {
       setIsResetting(false);
     }
@@ -114,60 +95,46 @@ const Login: React.FC = () => {
           </Box>
           <Box sx={{ p: 4, width: '100%' }}>
             <Typography component="h1" variant="h5" align="center" gutterBottom>
-              Sign In
+              Reset Password
             </Typography>
             <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1 }}>
               <TextField
                 margin="normal"
                 required
                 fullWidth
-                id="email"
-                label="Email Address"
-                name="email"
-                autoComplete="email"
-                autoFocus
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                name="password"
+                label="New Password"
+                type="password"
+                id="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
               />
               <TextField
                 margin="normal"
                 required
                 fullWidth
-                name="password"
-                label="Password"
+                name="confirmPassword"
+                label="Confirm New Password"
                 type="password"
-                id="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                id="confirmPassword"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
               />
               <Button
                 type="submit"
                 fullWidth
                 variant="contained"
                 sx={{ mt: 3, mb: 2 }}
+                disabled={isResetting}
               >
-                Sign In
+                {isResetting ? 'Resetting Password...' : 'Reset Password'}
               </Button>
-              <Box sx={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 1 }}>
-                <Link
-                  component="button"
-                  variant="body2"
-                  onClick={handleForgotPassword}
-                  disabled={isResetting}
-                >
-                  {isResetting ? 'Sending reset link...' : 'Forgot your password?'}
-                </Link>
-                <Link component={RouterLink} to="/signup" variant="body2">
-                  Don't have an account? Sign Up
-                </Link>
-              </Box>
             </Box>
           </Box>
         </Paper>
       </Box>
     </Container>
   );
-};
+} 
 
-export default Login;
+export default ResetPassword;

@@ -1,25 +1,10 @@
 import { supabase } from './supabase';
 import { Budget, BudgetExpense, BudgetIncome, ExpenseCategory, BudgetCategory, BudgetCreateDTO, BudgetExpenseUpdateDTO, BudgetExpenseCreateDTO, BudgetIncomeCreateDTO } from '../models/Budget';
 import { getDatabaseMonth } from '../utils/dateUtils';
-import { Transaction } from '../models/Transaction';
+import { ParentTransaction, SplitTransaction, Transaction } from '../models/Transaction';
 import { createExpenses } from './expenseService';
 import { createIncomes } from './incomeService';
-import { mapDBDataToSplitTransaction } from './transactionService';
-
-// Helper function to map transaction data
-const mapTransaction = (data: any): Transaction => ({
-  id: data.id,
-  hashId: data.hash_id,
-  amount: data.amount,
-  date: new Date(data.date),
-  description: data.description,
-  expenseId: data.expense_id,
-  incomeId: data.income_id,
-  createdAt: new Date(data.created_at),
-  updatedAt: data.updated_at ? new Date(data.updated_at) : undefined,
-  splits: data.splits ? data.splits.map(mapDBDataToSplitTransaction) : [],
-  isSplit: data.splits && data.splits.length > 0
-});
+import { mapDBDataToSplitTransaction, mapTransaction } from './transactionService';
 
 // Helper function to map expense category
 const mapExpenseCategory = (data: any): ExpenseCategory => ({
@@ -52,7 +37,8 @@ const mapExpense = (data: any): BudgetExpense => ({
   createdAt: new Date(data.created_at),
   updatedAt: new Date(data.updated_at),
   sequenceNumber: data.sequence_number,
-  transactions: data.transactions ? data.transactions.map(mapTransaction) : []
+  transactions: data.transactions ? data.transactions.map(mapTransaction) : [],
+  splitTransactions: data.split_transactions ? data.split_transactions.map(mapDBDataToSplitTransaction) : [] 
 });
 
 // Helper function to map income with transactions
@@ -111,9 +97,10 @@ export const getBudgetByMonthAndYear = async (month: number, year: number, userI
       ),
       expenses:budget_expenses(
         *,
-        transactions(
+        transactions(*),
+        split_transactions(
           *,
-          splits:split_transactions(*)
+          parent_transaction:transactions(*)
         )
       ),
       incomes:budget_incomes(
@@ -135,7 +122,7 @@ export const getBudgetByMonthAndYear = async (month: number, year: number, userI
 };
 
 // Get the most recent budget before the given month/year
-export const getMostRecentBudget = async (month: number, year: number, userId: string): Promise<Budget | null> => {
+export const getMostRecentBudgetForCopy = async (month: number, year: number, userId: string): Promise<Budget | null> => {
   const { data, error } = await supabase
     .from('budgets')
     .select(`
@@ -144,17 +131,8 @@ export const getMostRecentBudget = async (month: number, year: number, userId: s
         *,
         category:expense_categories!inner(*)
       ),
-      expenses:budget_expenses(
-        *,
-        transactions(
-          *,
-          splits:split_transactions(*)
-        )
-      ),
-      incomes:budget_incomes(
-        *,
-        transactions(*)
-      )
+      expenses:budget_expenses(*),
+      incomes:budget_incomes(*)
     `)
     .eq('user_id', userId)
     .or(`year.lt.${year},and(year.eq.${year},month.lt.${month})`)
@@ -187,7 +165,7 @@ export const createBudget = async (budget: BudgetCreateDTO): Promise<Budget> => 
 
   if (budgetError) throw budgetError;
 
-  const recentBudget = await getMostRecentBudget(budget.month, budget.year, budget.userId);
+  const recentBudget = await getMostRecentBudgetForCopy(budget.month, budget.year, budget.userId);
   // If we have a recent budget and it has data, copy it
   if (recentBudget?.categories?.length || recentBudget?.expenses?.length || recentBudget?.incomes?.length) {
     try {

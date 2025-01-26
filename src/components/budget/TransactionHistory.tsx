@@ -9,9 +9,11 @@ import {
   Paper,
   Divider,
   styled,
-  useTheme
+  useTheme,
+  Chip,
+  Icon
 } from '@mui/material';
-import { Delete } from '@mui/icons-material';
+import { CallSplitTwoTone, Delete } from '@mui/icons-material';
 import { Budget } from '../../models/Budget';
 import TransactionDialog from '../transactions/TransactionDialog';
 import { SwipeableList, SwipeableListItem } from '@sandstreamdev/react-swipeable-list';
@@ -42,6 +44,8 @@ function TransactionHistory({
     sourceName: string;
     type: 'income' | 'expense';
     categoryColor?: string;
+    splitAmount?: number;
+    isSplit?: boolean;
   }>(null);
 
   const theme = useTheme();
@@ -50,13 +54,24 @@ function TransactionHistory({
   // Get all transactions from both expenses and incomes
   const allTransactions = [
     ...(currentBudget.expenses || []).flatMap(expense => 
-      (expense.transactions || []).map(t => ({
-        ...t,
-        categoryName: currentBudget.categories?.find(c => c.category.id === expense.categoryId)?.category.name || 'Unknown',
-        categoryColor: currentBudget.categories?.find(c => c.category.id === expense.categoryId)?.category.color,
-        sourceName: expense.name,
-        type: 'expense' as const
-      }))
+      [
+        ...(expense.transactions || []).map(t => ({
+          ...t,
+          categoryName: currentBudget.categories?.find(c => c.category.id === expense.categoryId)?.category.name || 'Unknown',
+          categoryColor: currentBudget.categories?.find(c => c.category.id === expense.categoryId)?.category.color,
+          sourceName: expense.name,
+          type: 'expense' as const
+        })),
+        ...(expense.splitTransactions || []).map(split => ({
+          ...split.parentTransaction,
+          splitAmount: split.splitAmount,
+          categoryName: currentBudget.categories?.find(c => c.category.id === expense.categoryId)?.category.name || 'Unknown',
+          categoryColor: currentBudget.categories?.find(c => c.category.id === expense.categoryId)?.category.color,
+          sourceName: expense.name,
+          type: 'expense' as const,
+          isSplit: true
+        }))
+      ]
     ),
     ...(currentBudget.incomes || []).flatMap(income => 
       (income.transactions || []).map(t => ({
@@ -73,21 +88,20 @@ function TransactionHistory({
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
-  const renderTransaction = (transaction: {
-    date: Date;
-    description: string;
-    amount: number;
-    categoryName: string;
-    sourceName: string;
-    type: 'income' | 'expense';
-    categoryColor?: string;
-  }) => (
+  const renderTransaction = (transaction: any) => (
     <Box sx={{ width: '100%' }}>
       <ListItemText
         primary={
-          <Typography variant="body1">
-            {transaction.description}
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {transaction.isSplit && (
+              <Icon color="primary">
+                <CallSplitTwoTone />
+              </Icon>
+            )}
+            <Typography variant="body1">
+              {transaction.description}
+            </Typography>
+          </Box>
         }
         secondary={
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -98,7 +112,7 @@ function TransactionHistory({
               variant="body2"
               color={transaction.type === 'expense' ? 'error.main' : 'success.main'}
             >
-              {transaction.type === 'expense' ? '-' : '+'}${transaction.amount.toFixed(2)}
+              {transaction.type === 'expense' ? '-' : '+'}${(transaction.splitAmount || transaction.amount).toFixed(2)}
             </Typography>
           </Box>
         }

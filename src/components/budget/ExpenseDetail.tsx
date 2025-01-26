@@ -13,9 +13,11 @@ import {
   SwipeableDrawer,
   styled,
   useTheme,
-  ListItemSecondaryAction
+  ListItemSecondaryAction,
+  Chip,
+  Icon
 } from '@mui/material';
-import { Close, Delete, AccountBalance, CallSplit } from '@mui/icons-material';
+import { Close, Delete, AccountBalance, CallSplit, CallSplitTwoTone } from '@mui/icons-material';
 import { Transaction, TransactionSplitDTO } from '../../models/Transaction';
 import { Budget, BudgetExpense, ExpenseCategory } from '../../models/Budget';
 import { createTransaction, deleteTransaction, splitTransaction } from '../../services/transactionService';
@@ -66,7 +68,9 @@ function ExpenseDetail({
   const { user } = useAuth();
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
 
-  const totalSpent = (expense.transactions || []).reduce((sum, t) => sum + t.amount, 0);
+  // const totalSpent = (expense.transactions || []).reduce((sum, t) => sum + t.amount, 0);
+  const totalSpent = (expense.transactions || []).reduce((sum, t) => sum + t.amount, 0) +
+  (expense.splitTransactions || []).reduce((sum, t) => sum + t.splitAmount, 0);
   const remaining = expense.amount - totalSpent;
   const percentageSpent = expense.amount > 0 ? (totalSpent / expense.amount) * 100 : 0;
 
@@ -237,20 +241,35 @@ function ExpenseDetail({
                   </IconButton>
                 </ListItemSecondaryAction>
               </ListItem>
-              {transaction.splits && transaction.splits.length > 0 && (
-                <List sx={{ pl: 4, py: 0 }}>
-                  {transaction.splits.map((split) => (
-                    <ListItem key={split.id} sx={{ py: 0.5 }}>
-                      <ListItemText
-                        primary={`Split: $${split.splitAmount.toFixed(2)}`}
-                        secondary={`To: ${currentBudget?.expenses?.find(e => e.id === split.expenseId)?.name || 'Unknown'}`}
-                        primaryTypographyProps={{ variant: 'body2' }}
-                        secondaryTypographyProps={{ variant: 'caption' }}
-                      />
-                    </ListItem>
-                  ))}
-                </List>
-              )}
+              <Divider component="li" />
+            </React.Fragment>
+          ))}
+          {expense.splitTransactions?.map((splitTransaction) => (
+            <React.Fragment key={splitTransaction.id}>
+              <ListItem>
+                <ListItemText
+                  primary={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Icon>
+                        <CallSplitTwoTone />
+                      </Icon>
+                      <Typography>{splitTransaction.parentTransaction.description}</Typography>
+                    </Box>
+                  }
+                  secondary={format(new Date(splitTransaction.parentTransaction.date), 'MMM d, yyyy')}
+                />
+                <ListItemSecondaryAction sx={{ display: 'flex', alignItems: 'center' }}>
+                  <Typography color="error.main" sx={{ mr: 2 }}>
+                    ${splitTransaction.splitAmount.toFixed(2)}
+                  </Typography>
+                  <IconButton
+                    edge="end"
+                    onClick={() => splitTransaction.parentTransaction.id && handleDeleteTransaction(splitTransaction.parentTransaction.id)}
+                  >
+                    <Delete />
+                  </IconButton>
+                </ListItemSecondaryAction>
+              </ListItem>
               <Divider component="li" />
             </React.Fragment>
           ))}

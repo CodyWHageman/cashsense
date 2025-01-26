@@ -59,7 +59,9 @@ function BudgetSummary({
     
     // Calculate spent amount (sum of all transactions for expenses in this category)
     const spent = categoryExpenses.reduce((sum, expense) => {
-      return sum + (expense.transactions || []).reduce((tSum, t) => tSum + t.amount, 0);
+      const transactionTotal = (expense.transactions || []).reduce((tSum, t) => tSum + t.amount, 0);
+      const splitTotal = (expense.splitTransactions || []).reduce((tSum, t) => tSum + t.splitAmount, 0);
+      return sum + transactionTotal + splitTotal;
     }, 0);
 
     // Calculate remaining (planned - spent)

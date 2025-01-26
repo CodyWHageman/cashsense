@@ -77,6 +77,7 @@ CREATE TABLE transactions (
   amount DECIMAL(10,2) NOT NULL,
   income_id UUID REFERENCES budget_incomes(id) ON DELETE RESTRICT,
   expense_id UUID REFERENCES budget_expenses(id) ON DELETE RESTRICT,
+  is_split BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -409,13 +410,23 @@ CREATE INDEX idx_split_transactions_parent ON split_transactions(parent_transact
 ALTER TABLE split_transactions ENABLE ROW LEVEL SECURITY;
 
 -- Create policies for split_transactions table
-CREATE POLICY "Users can view their own split transactions" ON split_transactions
+CREATE POLICY "Users can view their own split transactions through parent" ON split_transactions
   FOR SELECT USING (
     EXISTS (
       SELECT 1 FROM transactions t
       JOIN budget_expenses e ON t.expense_id = e.id
       JOIN budgets b ON e.budget_id = b.id
       WHERE t.id = split_transactions.parent_transaction_id
+      AND b.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Users can view their own split transactions through expense" ON split_transactions
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM budget_expenses e
+      JOIN budgets b ON e.budget_id = b.id
+      WHERE e.id = split_transactions.expense_id
       AND b.user_id = auth.uid()
     )
   );
