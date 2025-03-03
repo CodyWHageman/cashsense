@@ -25,6 +25,7 @@ interface FundTransactionOptionsDialogProps {
   fund: Fund;
   transaction: TransactionCreateDTO;
   onCreateWithdrawal: () => Promise<void>;
+  onCreateDeposit: () => Promise<void>;
   onLinkToExisting: (fundTransactionId: string) => Promise<void>;
 }
 
@@ -34,9 +35,14 @@ export default function FundTransactionOptionsDialog({
   fund,
   transaction,
   onCreateWithdrawal,
+  onCreateDeposit,
   onLinkToExisting,
 }: FundTransactionOptionsDialogProps) {
-  const [selectedOption, setSelectedOption] = useState<'fund' | 'transaction'>('fund');
+  if (!open || !fund || !transaction) {
+    return null;
+  }
+
+  const [selectedOption, setSelectedOption] = useState<'fund-deposit' | 'fund-withdrawal' | 'transaction'>('fund-deposit');
   const [selectedFundTransactionId, setSelectedFundTransactionId] = useState<string>('');
   const [pendingTransactions, setPendingTransactions] = useState<FundTransaction[]>([]);
 
@@ -53,7 +59,9 @@ export default function FundTransactionOptionsDialog({
   }, [open, fund]);
 
   const handleConfirm = async () => {
-    if (selectedOption === 'fund') {
+    if (selectedOption === 'fund-deposit') {
+      await onCreateDeposit();
+    } else if (selectedOption === 'fund-withdrawal') {
       await onCreateWithdrawal();
     } else {
       await onLinkToExisting(selectedFundTransactionId);
@@ -83,12 +91,17 @@ export default function FundTransactionOptionsDialog({
         <RadioGroup
           value={selectedOption}
           onChange={(e) => {
-            setSelectedOption(e.target.value as 'fund' | 'transaction');
+            setSelectedOption(e.target.value as 'fund-deposit' | 'fund-withdrawal' | 'transaction');
             setSelectedFundTransactionId(''); // Reset selection when changing options
           }}
         >
           <FormControlLabel 
-            value="fund" 
+            value="fund-deposit" 
+            control={<Radio />} 
+            label={`Create new deposit transaction for ${fund.name}`}
+          />
+          <FormControlLabel 
+            value="fund-withdrawal" 
             control={<Radio />} 
             label={`Create new withdrawal transaction for ${fund.name}`}
           />

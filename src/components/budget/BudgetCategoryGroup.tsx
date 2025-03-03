@@ -15,6 +15,7 @@ import {
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { BudgetCategory, BudgetExpense, BudgetExpenseCreateDTO, BudgetExpenseUpdateDTO } from '../../models/Budget';
 import { ExpandMore, Add, SavingsTwoTone, Delete } from '@mui/icons-material';
+import { sequenceService } from '../../services/sequenceService';
 
 interface BudgetCategoryGroupProps {
   budgetCategory: BudgetCategory;

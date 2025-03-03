@@ -113,7 +113,7 @@ function BudgetCategories({
         currentBudget.id,
         updatedCategories.map(cat => ({
           budgetId: currentBudget.id,
-          categoryId: cat.id,
+          categoryId: cat.category.id,
           sequenceNumber: cat.sequenceNumber
         }))
       );
@@ -132,7 +132,7 @@ function BudgetCategories({
       onExpensesChange(updatedExpenses || []);
 
       // Save to database
-      await sequenceService.updateExpenseSequence(categoryId, reorderedExpenses);
+      await sequenceService.updateExpenseSequence(reorderedExpenses);
     } catch (error) {
       console.error('Error updating expense sequence:', error);
       // Optionally revert the local state on error
