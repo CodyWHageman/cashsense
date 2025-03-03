@@ -39,6 +39,7 @@ import { useResponsive } from '../../hooks/useResponsive';
 import { ExpenseSearchBox } from '../budget/ExpenseSearchBox';
 import { calculateFundBalance } from '../../utils/fundUtils';
 import { FileDropZone } from '../common/FileDropZone';
+import FundTransactionOptionsDialog from '../funds/FundTransactionOptionsDialog';
 
 interface ImportTemplate {
   id: string;
@@ -385,7 +386,7 @@ export default function TransactionImportModal({
     }
   };
 
-  const handleCreateWithdrawal = async () => {
+  const handleCreateTransactionForFund = async (transactionType: 'deposit' | 'withdrawal') => {
     if (!fundTransactionDialog.fund || !fundTransactionDialog.transaction) return;
 
     try {
@@ -393,12 +394,12 @@ export default function TransactionImportModal({
       const newTransaction = await createTransaction({ ...fundTransactionDialog.transaction });
 
       if (newTransaction.id) {
-        // Create a fund transaction with type withdrawal and transfer_complete false
+        // Create a fund transaction with type deposit and transfer_complete false
         await createFundTransaction(
           fundTransactionDialog.fund.id,
           newTransaction.id,
-          'withdrawal',
-          false
+          transactionType,
+          transactionType === 'withdrawal' ? false : true
         );
       }
 
@@ -407,12 +408,12 @@ export default function TransactionImportModal({
         prev.filter(t => t.hashId !== fundTransactionDialog.transaction?.hashId)
       );
 
-      enqueueSnackbar('Fund withdrawal created successfully', { variant: 'success' });
+      enqueueSnackbar(`Fund ${transactionType} created successfully`, { variant: 'success' });
       onTransactionsAdded([newTransaction]);
       setFundTransactionDialog({ open: false, fund: null, transaction: null });
     } catch (error) {
-      console.error('Error creating fund withdrawal:', error);
-      enqueueSnackbar('Error creating fund withdrawal', { variant: 'error' });
+      console.error(`Error creating fund ${transactionType}:`, error);
+      enqueueSnackbar(`Error creating fund ${transactionType}`, { variant: 'error' });
     }
   };
 
@@ -948,6 +949,15 @@ export default function TransactionImportModal({
           </DragDropContext>
         )}
       </Box>
+      <FundTransactionOptionsDialog
+        open={fundTransactionDialog.open}
+        onClose={() => setFundTransactionDialog({ open: false, fund: null, transaction: null })}
+        fund={fundTransactionDialog.fund as Fund}
+        transaction={fundTransactionDialog.transaction as TransactionCreateDTO}
+        onCreateWithdrawal={() => handleCreateTransactionForFund('withdrawal')}
+        onCreateDeposit={() => handleCreateTransactionForFund('deposit')}
+        onLinkToExisting={handleLinkToExisting}
+      />
     </Box>
   );
 

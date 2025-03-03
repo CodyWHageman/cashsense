@@ -11,6 +11,7 @@ import {
   SettingsTwoTone,
   InfoTwoTone
 } from '@mui/icons-material';
+import cashSenseLogo from '../../../images/cashsense-small.png';
 
 const StyledSideNav = styled(Box)(({ theme }) => ({
   width: '250px',
@@ -40,6 +41,17 @@ export function SideNavigation({
 }: SideNavigationProps) {
   return (
     <StyledSideNav>
+      <Box sx={{ p: 2, mb: 2 }}>
+        <Box
+          component="img"
+          src={cashSenseLogo}
+          alt="CashSense Logo"
+          sx={{ 
+            width: '100%',
+            height: 'auto'
+          }}
+        />
+      </Box>
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, p: 2 }}>
         <Button
           startIcon={<CalculateTwoTone />}

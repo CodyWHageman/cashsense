@@ -174,6 +174,7 @@ export const createBudget = async (budget: BudgetCreateDTO): Promise<Budget> => 
         const categoryAssociations = recentBudget.categories.map(budgetCategory => ({
           budget_id: newBudget.id,
           category_id: budgetCategory.category.id,
+          sequence_number: budgetCategory.sequenceNumber,
           created_at: new Date()
         }));
         const { error: categoriesError } = await supabase
