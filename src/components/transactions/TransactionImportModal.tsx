@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSnackbar } from 'notistack';
 import {
   Box,
@@ -24,9 +24,12 @@ import {
   Grid,
   Link,
   SwipeableDrawer,
-  useTheme
+  useTheme,
+  Tooltip,
+  TextField,
+  InputAdornment
 } from '@mui/material';
-import { Close, Delete } from '@mui/icons-material';
+import { Close, Delete, Search, Clear } from '@mui/icons-material';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { Transaction, TransactionCreateDTO } from '../../models/Transaction';
 import { BudgetExpense, BudgetIncome, Fund } from '../../models/Budget';
@@ -112,6 +115,46 @@ const LoadingDots = () => (
   </Box>
 );
 
+// Create a separate component for the search box to isolate rerenders
+const ExpenseSearchInput = ({ value, onChange }: { value: string, onChange: (value: string) => void }) => {
+  const inputRef = useRef<HTMLInputElement>(null);
+  
+  return (
+    <TextField
+      fullWidth
+      placeholder="Search expenses..."
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      inputRef={inputRef}
+      autoFocus
+      InputProps={{
+        startAdornment: (
+          <InputAdornment position="start">
+            <Search />
+          </InputAdornment>
+        ),
+        endAdornment: value ? (
+          <InputAdornment position="end">
+            <IconButton
+              size="small"
+              onClick={() => {
+                onChange('');
+                // Focus after clearing
+                setTimeout(() => inputRef.current?.focus(), 0);
+              }}
+              edge="end"
+            >
+              <Clear />
+            </IconButton>
+          </InputAdornment>
+        ) : null
+      }}
+      size="small"
+      variant="outlined"
+    />
+  );
+};
+
 export default function TransactionImportModal({
   open,
   onClose,
@@ -143,6 +186,21 @@ export default function TransactionImportModal({
   const theme = useTheme();
   const [currentTab, setCurrentTab] = useState(0);
   const [parsedTransactions, setParsedTransactions] = useState<Transaction[]>([]);
+  const transactionListRef = useRef<HTMLDivElement>(null);
+  const transactionsScrollRef = useRef<HTMLDivElement>(null);
+  const [expenseSearchTerm, setExpenseSearchTerm] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const filteredExpenses = useMemo(() => {
+    if (!expenseSearchTerm.trim()) {
+      return expenses;
+    }
+    
+    const searchTermLower = expenseSearchTerm.toLowerCase();
+    return expenses.filter(expense => 
+      expense.name.toLowerCase().includes(searchTermLower)
+    );
+  }, [expenses, expenseSearchTerm]);
 
   useEffect(() => {
     setInternalOpen(open);
@@ -168,6 +226,26 @@ export default function TransactionImportModal({
       loadTemplates();
     }
   }, [open, user]);
+
+  useEffect(() => {
+    // Track if the search field had focus before filtering
+    const hasFocus = document.activeElement === searchInputRef.current;
+    
+    // After rendering, if the field had focus before, restore it
+    if (hasFocus && searchInputRef.current) {
+      // Preserve cursor position by storing and restoring selection
+      const selectionStart = searchInputRef.current.selectionStart;
+      const selectionEnd = searchInputRef.current.selectionEnd;
+      
+      // Use requestAnimationFrame to ensure we run after render
+      requestAnimationFrame(() => {
+        if (searchInputRef.current) {
+          searchInputRef.current.focus();
+          searchInputRef.current.setSelectionRange(selectionStart, selectionEnd);
+        }
+      });
+    }
+  }, [expenseSearchTerm]);
 
   const handleClose = () => {
     setInternalOpen(false);
@@ -256,6 +334,7 @@ export default function TransactionImportModal({
         enqueueSnackbar(error instanceof Error ? error.message : 'Error processing file', { variant: 'error' });
       }
       setIsParsingFile(false);
+      setCurrentTab(1);
     };
 
     reader.onerror = () => {
@@ -323,8 +402,19 @@ export default function TransactionImportModal({
     if (transactions.length === 0) return;
 
     try {
-      if (type === 'fund') {
+      // Get the name of the destination based on type
+      let destinationName = '';
+      
+      if (type === 'expense') {
+        const expense = expenses.find(e => e.id === destinationId);
+        destinationName = expense?.name || 'expense';
+      } else if (type === 'income') {
+        const income = incomes.find(i => i.id === destinationId);
+        destinationName = income?.name || 'income';
+      } else if (type === 'fund') {
         const fund = funds.find(f => f.id === destinationId);
+        destinationName = fund?.name || 'fund';
+        
         if (fund) {
           setFundTransactionDialog({
             open: true,
@@ -372,8 +462,11 @@ export default function TransactionImportModal({
         return newSet;
       });
 
+      // Enhanced success message with destination name
       enqueueSnackbar(
-        `${newTransactions.length} transaction${newTransactions.length === 1 ? '' : 's'} saved successfully`,
+        <span>
+          {newTransactions.length} transaction{newTransactions.length === 1 ? '' : 's'} added to <strong>{destinationName}</strong> successfully
+        </span>,
         { variant: 'success' }
       );
 
@@ -392,6 +485,7 @@ export default function TransactionImportModal({
     try {
       // First create the transaction
       const newTransaction = await createTransaction({ ...fundTransactionDialog.transaction });
+      const fundName = fundTransactionDialog.fund.name;
 
       if (newTransaction.id) {
         // Create a fund transaction with type deposit and transfer_complete false
@@ -408,7 +502,12 @@ export default function TransactionImportModal({
         prev.filter(t => t.hashId !== fundTransactionDialog.transaction?.hashId)
       );
 
-      enqueueSnackbar(`Fund ${transactionType} created successfully`, { variant: 'success' });
+      enqueueSnackbar(
+        <span>
+          Transaction added as {transactionType} to <strong>{fundName}</strong> successfully
+        </span>, 
+        { variant: 'success' }
+      );
       onTransactionsAdded([newTransaction]);
       setFundTransactionDialog({ open: false, fund: null, transaction: null });
     } catch (error) {
@@ -445,9 +544,21 @@ export default function TransactionImportModal({
   };
 
   const handleDragEnd = async (result: any) => {
+    // Early return if no destination
     if (!result.destination) return;
-
-    const [type, id] = result.destination.droppableId.split(':');
+    
+    // Parse the destination ID format which should be "type:id"
+    const destinationParts = result.destination.droppableId.split(':');
+    
+    // If the format is incorrect or type is invalid, don't process the drop
+    if (destinationParts.length !== 2) return;
+    
+    const [type, id] = destinationParts;
+    
+    // Only process drops on valid target types
+    if (!['expense', 'income', 'fund'].includes(type)) return;
+    
+    // Now it's safe to process the transaction drop
     await handleTransactionDrop(id, [result.draggableId], type as 'expense' | 'income' | 'fund');
   };
 
@@ -457,6 +568,9 @@ export default function TransactionImportModal({
   };
 
   const toggleTransaction = (transactionId: string) => {
+    // Save the current scroll position before updating state
+    const scrollPosition = transactionsScrollRef.current?.scrollTop || 0;
+    
     setSelectedTransactions(prev => {
       const newSet = new Set(prev);
       if (newSet.has(transactionId)) {
@@ -465,6 +579,13 @@ export default function TransactionImportModal({
         newSet.add(transactionId);
       }
       return newSet;
+    });
+    
+    // Use requestAnimationFrame instead of setTimeout for more reliable timing
+    requestAnimationFrame(() => {
+      if (transactionsScrollRef.current) {
+        transactionsScrollRef.current.scrollTop = scrollPosition;
+      }
     });
   };
 
@@ -502,7 +623,7 @@ export default function TransactionImportModal({
         </Tabs>
       </Box>
 
-      <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
+      <Box sx={{ flex: 1, overflow: 'auto', p: 2, paddingTop: 0 }}>
         {currentTab === 0 ? (
           <>
             <FormControl fullWidth sx={{ mb: 2 }}>
@@ -539,22 +660,41 @@ export default function TransactionImportModal({
           <DragDropContext onDragEnd={handleDragEnd}>
             <Grid container spacing={2}>
               {/* Left side - Categories */}
-              <Grid item xs={12} md={6}>
-                <Tabs
-                  value={tabValue}
-                  onChange={(_, newValue) => setTabValue(newValue)}
-                  sx={{ borderBottom: 1, borderColor: 'divider' }}
-                >
-                  <Tab label="Expenses" />
-                  <Tab label="Incomes" />
-                  <Tab label="Funds" />
-                </Tabs>
-
-                {/* Make each tab panel scrollable independently */}
+              <Grid item xs={12} md={7}>
+                {/* Sticky header for categories section */}
                 <Box sx={{ 
-                  flex: 1, 
+                  position: 'sticky', 
+                  top: 0, 
+                  bgcolor: 'background.paper', 
+                  zIndex: 1,
+                  borderBottom: 1,
+                  borderColor: 'divider',
+                  mb: 1
+                }}>
+                  <Tabs
+                    value={tabValue}
+                    onChange={(_, newValue) => setTabValue(newValue)}
+                  >
+                    <Tab label="Expenses" />
+                    <Tab label="Incomes" />
+                    <Tab label="Funds" />
+                  </Tabs>
+                  
+                  {/* Add the search box here, but only show it for the Expenses tab */}
+                  {tabValue === 0 && (
+                    <Box sx={{ p: 1, borderBottom: 1, borderColor: 'divider' }}>
+                      <ExpenseSearchInput 
+                        value={expenseSearchTerm}
+                        onChange={setExpenseSearchTerm}
+                      />
+                    </Box>
+                  )}
+                </Box>
+
+                {/* Scrollable content area for categories */}
+                <Box sx={{ 
                   overflowY: 'auto',
-                  // Add subtle scrollbar styling
+                  height: 'calc(100vh - 300px)',
                   '&::-webkit-scrollbar': {
                     width: '8px',
                   },
@@ -567,21 +707,9 @@ export default function TransactionImportModal({
                   },
                 }}>
                   <TabPanel value={tabValue} index={0}>
-                    <Box sx={{ mb: 2 }}>
-                      <ExpenseSearchBox
-                        expenses={expenses}
-                        onSelect={(expense) => {
-                          if (expense) {
-                            // Scroll to the expense
-                            const element = document.getElementById(`expense-${expense.id}`);
-                            element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                          }
-                        }}
-                      />
-                    </Box>
                     <Grid container spacing={1}>
-                      {expenses.map(expense => (
-                        <Grid item xs={6} sm={4} md={3} key={expense.id}>
+                      {filteredExpenses.map(expense => (
+                        <Grid item xs={6} sm={4} md={4} key={expense.id}>
                           <Droppable droppableId={`expense:${expense.id}`}>
                             {(provided) => (
                               <Paper
@@ -589,7 +717,8 @@ export default function TransactionImportModal({
                                 ref={provided.innerRef}
                                 {...provided.droppableProps}
                                 sx={{
-                                  p: 1,
+                                  p: 2,
+                                  minHeight: 100,
                                   cursor: 'pointer',
                                   transition: 'all 0.2s',
                                   '&:hover': {
@@ -599,14 +728,23 @@ export default function TransactionImportModal({
                                   display: 'flex',
                                   flexDirection: 'column',
                                   alignItems: 'center',
+                                  justifyContent: 'center',
                                   textAlign: 'center',
                                   height: '100%'
                                 }}
                                 onClick={() => handleItemClick(expense.id, 'expense')}
                               >
-                                <Typography variant="body2" noWrap>
-                                  {expense.name}
-                                </Typography>
+                                <Tooltip title={expense.name} enterDelay={500}>
+                                  <Typography variant="body1" sx={{ 
+                                    width: '100%',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    mb: 1
+                                  }}>
+                                    {expense.name}
+                                  </Typography>
+                                </Tooltip>
                                 <Typography variant="caption" color="text.secondary">
                                   ${expense.amount.toFixed(2)}
                                 </Typography>
@@ -618,18 +756,19 @@ export default function TransactionImportModal({
                       ))}
                     </Grid>
                   </TabPanel>
-
+                  
                   <TabPanel value={tabValue} index={1}>
                     <Grid container spacing={1}>
                       {incomes.map(income => (
-                        <Grid item xs={6} sm={4} md={3} key={income.id}>
+                        <Grid item xs={6} sm={4} md={4} key={income.id}>
                           <Droppable droppableId={`income:${income.id}`}>
                             {(provided) => (
                               <Paper
                                 ref={provided.innerRef}
                                 {...provided.droppableProps}
                                 sx={{
-                                  p: 1,
+                                  p: 2,
+                                  minHeight: 100,
                                   cursor: 'pointer',
                                   transition: 'all 0.2s',
                                   '&:hover': {
@@ -639,14 +778,23 @@ export default function TransactionImportModal({
                                   display: 'flex',
                                   flexDirection: 'column',
                                   alignItems: 'center',
+                                  justifyContent: 'center',
                                   textAlign: 'center',
                                   height: '100%'
                                 }}
                                 onClick={() => handleItemClick(income.id, 'income')}
                               >
-                                <Typography variant="body2" noWrap>
-                                  {income.name}
-                                </Typography>
+                                <Tooltip title={income.name} enterDelay={500}>
+                                  <Typography variant="body1" sx={{ 
+                                    width: '100%',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    mb: 1
+                                  }}>
+                                    {income.name}
+                                  </Typography>
+                                </Tooltip>
                                 <Typography variant="caption" color="text.secondary">
                                   ${income.amount.toFixed(2)}
                                 </Typography>
@@ -658,21 +806,22 @@ export default function TransactionImportModal({
                       ))}
                     </Grid>
                   </TabPanel>
-
+                  
                   <TabPanel value={tabValue} index={2}>
                     <Grid container spacing={1}>
                       {funds.map(fund => {
                         const {balance} = calculateFundBalance(fund);
 
                         return (
-                          <Grid item xs={6} sm={4} md={3} key={fund.id}>
+                          <Grid item xs={6} sm={4} md={4} key={fund.id}>
                             <Droppable droppableId={`fund:${fund.id}`}>
                               {(provided) => (
                                 <Paper
                                   ref={provided.innerRef}
                                   {...provided.droppableProps}
                                   sx={{
-                                    p: 1,
+                                    p: 2,
+                                    minHeight: 100,
                                     cursor: 'pointer',
                                     transition: 'all 0.2s',
                                     '&:hover': {
@@ -682,14 +831,23 @@ export default function TransactionImportModal({
                                     display: 'flex',
                                     flexDirection: 'column',
                                     alignItems: 'center',
+                                    justifyContent: 'center',
                                     textAlign: 'center',
                                     height: '100%'
                                   }}
                                   onClick={() => handleItemClick(fund.id, 'fund')}
                                 >
-                                  <Typography variant="body2" noWrap>
-                                    {fund.name}
-                                  </Typography>
+                                  <Tooltip title={fund.name} enterDelay={500}>
+                                    <Typography variant="body1" sx={{ 
+                                      width: '100%',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                      mb: 1
+                                    }}>
+                                      {fund.name}
+                                    </Typography>
+                                  </Tooltip>
                                   <Typography variant="caption" color="text.secondary">
                                     Target: ${fund.targetAmount.toFixed(2)}
                                   </Typography>
@@ -712,7 +870,7 @@ export default function TransactionImportModal({
               </Grid>
 
               {/* Right side - Transactions */}
-              <Grid item xs={12} md={6}>
+              <Grid item xs={12} md={5}>
                 {importedTransactions.length === 0 ? (
                   <Paper 
                     sx={{ 
@@ -800,34 +958,12 @@ export default function TransactionImportModal({
                   </Paper>
                 ) : (
                   <Box sx={{ 
-                    flex: 1, 
                     display: 'flex', 
                     flexDirection: 'column',
-                    height: '100%',
-                    position: 'relative' // For loading indicator positioning
+                    height: 'calc(100vh - 300px)',
+                    position: 'relative'
                   }}>
-                    {isParsingFile && (
-                      <Box 
-                        sx={{ 
-                          position: 'absolute',
-                          top: 0,
-                          left: 0,
-                          right: 0,
-                          display: 'flex', 
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: 1,
-                          py: 1,
-                          bgcolor: 'background.paper',
-                          borderBottom: 1,
-                          borderColor: 'divider',
-                          zIndex: 1
-                        }}
-                      >
-                        <Typography variant="body2">Parsing transactions</Typography>
-                        <LoadingDots />
-                      </Box>
-                    )}
+                    {/* Sticky header for transactions */}
                     <Box sx={{ 
                       position: 'sticky',
                       top: 0,
@@ -872,21 +1008,25 @@ export default function TransactionImportModal({
                         )}
                       </Box>
                     </Box>
-                    <Box sx={{ 
-                      flex: 1, 
-                      overflowY: 'auto',
-                      // Add subtle scrollbar styling
-                      '&::-webkit-scrollbar': {
-                        width: '8px',
-                      },
-                      '&::-webkit-scrollbar-track': {
-                        background: 'transparent',
-                      },
-                      '&::-webkit-scrollbar-thumb': {
-                        background: 'rgba(0,0,0,0.1)',
-                        borderRadius: '4px',
-                      },
-                    }}>
+                    
+                    {/* Scrollable transactions list */}
+                    <Box 
+                      ref={transactionsScrollRef}
+                      sx={{ 
+                        flex: 1, 
+                        overflowY: 'auto',
+                        '&::-webkit-scrollbar': {
+                          width: '8px',
+                        },
+                        '&::-webkit-scrollbar-track': {
+                          background: 'transparent',
+                        },
+                        '&::-webkit-scrollbar-thumb': {
+                          background: 'rgba(0,0,0,0.1)',
+                          borderRadius: '4px',
+                        },
+                      }}
+                    >
                       <Paper sx={{ flex: 1, overflow: 'auto' }}>
                         <Droppable droppableId="transactions">
                           {(provided) => (
@@ -986,10 +1126,13 @@ export default function TransactionImportModal({
     <Dialog
       open={internalOpen}
       onClose={handleClose}
-      maxWidth="md"
+      maxWidth="lg"
       fullWidth
       PaperProps={{
-        sx: { height: '80vh' }
+        sx: { 
+          height: '90vh',
+          width: '95%'
+        }
       }}
     >
       <DialogTitle>
