@@ -43,6 +43,7 @@ import { ExpenseSearchBox } from '../budget/ExpenseSearchBox';
 import { calculateFundBalance } from '../../utils/fundUtils';
 import { FileDropZone } from '../common/FileDropZone';
 import FundTransactionOptionsDialog from '../funds/FundTransactionOptionsDialog';
+import { calculateExpenseRemaining, calculateIncomeRemaining }  from '../../utils/calculator';
 
 interface ImportTemplate {
   id: string;
@@ -745,9 +746,14 @@ export default function TransactionImportModal({
                                     {expense.name}
                                   </Typography>
                                 </Tooltip>
-                                <Typography variant="caption" color="text.secondary">
-                                  ${expense.amount.toFixed(2)}
-                                </Typography>
+                                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                  <Typography variant="caption" color="text.secondary">
+                                    Budget: ${expense.amount.toFixed(2)}
+                                  </Typography>
+                                  <Typography variant="caption" color="success.main">
+                                    Remaining: ${calculateExpenseRemaining(expense).toFixed(2)}
+                                  </Typography>
+                                </Box>
                                 {provided.placeholder}
                               </Paper>
                             )}
@@ -797,6 +803,9 @@ export default function TransactionImportModal({
                                 </Tooltip>
                                 <Typography variant="caption" color="text.secondary">
                                   ${income.amount.toFixed(2)}
+                                </Typography>
+                                <Typography variant="caption" color="success.main">
+                                  Remaining: ${calculateIncomeRemaining(income).toFixed(2)}
                                 </Typography>
                                 {provided.placeholder}
                               </Paper>

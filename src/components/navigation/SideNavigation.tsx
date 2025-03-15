@@ -30,6 +30,7 @@ interface SideNavigationProps {
   currentView: string;
   setCurrentView: (view: string) => void;
   userEmail?: string | null;
+  displayName?: string | null;
   onUserMenuClick: (event: React.MouseEvent<HTMLElement>) => void;
 }
 
@@ -37,6 +38,7 @@ export function SideNavigation({
   currentView, 
   setCurrentView, 
   userEmail,
+  displayName,
   onUserMenuClick 
 }: SideNavigationProps) {
   return (
@@ -97,11 +99,13 @@ export function SideNavigation({
           }}
           startIcon={
             <Avatar sx={{ width: 24, height: 24, fontSize: '0.8rem' }}>
-              {userEmail?.substring(0, 2).toUpperCase() || 'U'}
+              {displayName 
+                ? displayName.substring(0, 2).toUpperCase() 
+                : userEmail?.substring(0, 2).toUpperCase() || 'U'}
             </Avatar>
           }
         >
-          {userEmail}
+          {displayName || userEmail}
         </Button>
       </Box>
     </StyledSideNav>

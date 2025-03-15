@@ -1,10 +1,11 @@
 import { Box, Button, ButtonBase, Popover, styled, Typography } from '@mui/material';
 import { useAuth } from '../../contexts/AuthContext';
 import { BudgetIncome, Fund } from '../../models/Budget';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Budget } from '../../models/Budget';
 import { format } from 'date-fns';
 import { checkBudgetsExist } from '../../services/budgetService';
+import { calculateLeftToBudget } from '../../utils/calculator';
 
 const Header = styled(Box)(({ theme }) => ({
     width: '800px',
@@ -18,7 +19,8 @@ const Header = styled(Box)(({ theme }) => ({
     justifyContent: 'space-between',
     position: 'sticky',
     top: 0,
-    zIndex: 1
+    zIndex: 1100,
+    boxShadow: '0 1px 3px rgba(0,0,0,0.12)'
   }));
 
 interface BudgetHeaderProps {
@@ -28,38 +30,43 @@ interface BudgetHeaderProps {
   selectedYear: number;
 }
 
-  function BudgetHeader({ currentBudget, onMonthChange, selectedMonth, selectedYear } : BudgetHeaderProps) {  
+function BudgetHeader({ currentBudget, onMonthChange, selectedMonth, selectedYear } : BudgetHeaderProps) {  
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const { user } = useAuth();
   const [budgetExists, setBudgetExists] = useState<Record<string, boolean>>({});
+  
+  // Add a ref to track if we're checking budgets
+  const checkingBudgetsRef = useRef(false);
 
   const currentDate = new Date(selectedYear, selectedMonth);
   const monthYearDisplay = format(currentDate, 'MMMM yyyy');
   
   useEffect(() => {
     const checkBudgets = async () => {
-      if (!user?.id) return;
-
-      const startMonth = 10; // November (0-based)
-      const startYear = selectedYear - 1; // Previous year
-      const periods = [];
-
-      for (let i = 0; i < 9; i++) {
-        let month = startMonth + i;
-        let year = startYear;
-        
-        if (month > 11) {
-          month = month - 12;
-          year = year + 1;
-        }
-        
-        periods.push({
-          month: month + 1, // Convert to 1-based for database
-          year: year
-        });
-      }
+      if (!user?.id || checkingBudgetsRef.current) return;
+      
+      checkingBudgetsRef.current = true;
       
       try {
+        const startMonth = 10; // November (0-based)
+        const startYear = selectedYear - 1; // Previous year
+        const periods = [];
+
+        for (let i = 0; i < 9; i++) {
+          let month = startMonth + i;
+          let year = startYear;
+          
+          if (month > 11) {
+            month = month - 12;
+            year = year + 1;
+          }
+          
+          periods.push({
+            month: month + 1, // Convert to 1-based for database
+            year: year
+          });
+        }
+        
         const results = await checkBudgetsExist(periods, user.id);
         const existsMap = results.reduce((acc, result) => {
           acc[`${result.year}-${result.month}`] = result.exists;
@@ -68,6 +75,8 @@ interface BudgetHeaderProps {
         setBudgetExists(existsMap);
       } catch (error) {
         console.error('Error checking budgets:', error);
+      } finally {
+        checkingBudgetsRef.current = false;
       }
     };
     
@@ -106,12 +115,6 @@ interface BudgetHeaderProps {
   const handleMonthYearSelect = (month: number, year: number) => {
     onMonthChange(month, year);
     handleMonthSelectorClose();
-  };
-
-  const calculateLeftToBudget = (budget: Budget): number => {
-    const totalIncome = budget.incomes?.reduce((sum, income) => sum + income.amount, 0) || 0;
-    const totalExpenses = budget.expenses?.reduce((sum, expense) => sum + expense.amount, 0) || 0;
-    return totalIncome - totalExpenses;
   };
 
   const renderMonthSelector = () => {
@@ -187,12 +190,44 @@ interface BudgetHeaderProps {
         {months}
       </Box>
     );
+    };
+
+  const renderLeftToBudget = (currentBudget: Budget) => {
+    const leftToBudget = calculateLeftToBudget(currentBudget);
+    let fontColor = 'text.secondary';
+    let fontWeight = 'normal';
+    let leftToBudgetText = `${leftToBudget.toFixed(2)} Left to Budget`;
+
+    if (leftToBudget < 0) {
+      console.log('Left to Budget is less than 0');
+      fontColor = 'error.main';
+      fontWeight = 'bold';
+    }
+
+    if(leftToBudget === 0) {
+      console.log('Budget Met');
+      fontColor = 'success.main';
+      fontWeight = 'bold';
+      leftToBudgetText = 'Every Dollar Has A Job!';
+    }
+    
+    return (
+      <Typography 
+      variant="caption" 
+      sx={{ 
+        color: fontColor,
+        fontWeight: fontWeight
+      }}
+    >
+      {leftToBudgetText}
+    </Typography>
+    );
   };
 
-    return (
-        <Header>
-            <Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+  return (
+    <Header>
+        <Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <Typography 
             variant="h6" 
             component="h1" 
@@ -235,11 +270,7 @@ interface BudgetHeaderProps {
             </Box>
           </Box>
         </Box>
-        {currentBudget && (
-          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-            ${calculateLeftToBudget(currentBudget).toFixed(2)} Left to Budget
-          </Typography>
-        )}
+        {currentBudget && (renderLeftToBudget(currentBudget))}
       </Box>
       <Popover
         open={Boolean(anchorEl)}
@@ -264,4 +295,4 @@ interface BudgetHeaderProps {
   )
 }
 
-  export default BudgetHeader;
+export default BudgetHeader;

@@ -59,9 +59,12 @@ export function BudgetMainContent({
             flexDirection: 'column',
             width: '100%'
         }}>
-            <Box sx={{ mb: isMobile ? 1 : 2 }}>
-                <BudgetHeader currentBudget={currentBudget} onMonthChange={onMonthChange} selectedMonth={selectedMonth} selectedYear={selectedYear} />
-            </Box>
+            <BudgetHeader 
+                currentBudget={currentBudget} 
+                onMonthChange={onMonthChange} 
+                selectedMonth={selectedMonth} 
+                selectedYear={selectedYear} 
+            />
             <MainContent>
                 {!currentBudget ? (
                     <Paper sx={{ p: isMobile ? 2 : 4, textAlign: 'center' }}>

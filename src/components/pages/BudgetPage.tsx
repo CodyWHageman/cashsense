@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Box } from '@mui/material';
 import { BudgetMainContent } from '../budget/BudgetMainContent';
 import { BudgetDetailPanel } from '../budget/BudgetDetailPanel';
@@ -28,47 +28,66 @@ function BudgetPage() {
     const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
     const [funds, setFunds] = useState<Fund[]>([]);
+    
+    // Add refs to track loading states
+    const loadingBudgetRef = useRef(false);
+    const loadingFundsRef = useRef(false);
 
-
+    // Combine the two useEffects to avoid redundant rerenders
     useEffect(() => {
-        loadBudget();
+        if (!user?.id) return;
+        
+        const loadData = async () => {
+            try {
+                // Only load budget if not already loading
+                if (!loadingBudgetRef.current) {
+                    loadingBudgetRef.current = true;
+                    try {
+                        const budget = await getBudgetByMonthAndYear(
+                            getDatabaseMonth(selectedMonth), 
+                            selectedYear, 
+                            user.id
+                        );
+                        
+                        if (budget) {
+                            setCurrentBudget({
+                                ...budget,
+                                month: getJavaScriptMonth(budget.month)
+                            });
+                        } else {
+                            setCurrentBudget(null);
+                        }
+                    } catch (error: any) {
+                        if (!error.message?.includes('no rows in result set')) {
+                            console.error('Error loading budget:', error);
+                            enqueueSnackbar('Error loading budget', { variant: 'error' });
+                        }
+                    } finally {
+                        loadingBudgetRef.current = false;
+                    }
+                }
+                
+                // Only load funds if not already loading
+                if (!loadingFundsRef.current) {
+                    loadingFundsRef.current = true;
+                    try {
+                        const userFunds = await getUserFunds(user.id);
+                        setFunds(userFunds);
+                    } catch (error) {
+                        console.error('Error loading funds:', error);
+                        enqueueSnackbar('Error loading funds', { variant: 'error' });
+                    } finally {
+                        loadingFundsRef.current = false;
+                    }
+                }
+            } finally {
+                setLoading(false);
+            }
+        };
+        
+        loadData();
     }, [user?.id, selectedMonth, selectedYear]);
 
-    const loadBudget = async () => {
-        try {
-            const budget = await getBudgetByMonthAndYear(getDatabaseMonth(selectedMonth), selectedYear, user.id);
-            if (budget) {
-                setCurrentBudget({
-                    ...budget,
-                    month: getJavaScriptMonth(budget.month)
-                });
-            } else {
-                setCurrentBudget(null);
-            }
-        } catch (error: any) {
-            if (!error.message?.includes('no rows in result set')) {
-                console.error('Error loading budget:', error);
-                enqueueSnackbar('Error loading budget', { variant: 'error' });
-            }
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        const loadUserFunds = async () => {
-          if (!user?.id) return;
-          try {
-            const userFunds = await getUserFunds(user.id);
-            setFunds(userFunds);
-          } catch (error) {
-            console.error('Error loading funds:', error);
-            enqueueSnackbar('Error loading funds', { variant: 'error' });
-          }
-        };
-        loadUserFunds();
-      }, [user?.id]);
-      
     const handleMonthChange = (month: number, year: number) => {
         setSelectedMonth(month);
         setSelectedYear(year);

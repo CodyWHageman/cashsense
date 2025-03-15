@@ -1,6 +1,13 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../services/supabase';
 
+interface UserProfile {
+  id: string;
+  email?: string | null;
+  display_name?: string | null;
+  theme_preference?: 'light' | 'dark';
+}
+
 interface AuthContextType {
   user: any;
   loading: boolean;
@@ -9,6 +16,9 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   updatePassword: (newPassword: string) => Promise<void>;
+  updateUserProfile: (updates: Partial<UserProfile>) => Promise<void>;
+  getUserThemePreference: () => 'light' | 'dark' | null;
+  updateUserThemePreference: (theme: 'light' | 'dark') => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -76,6 +86,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (error) throw error;
   };
 
+  const updateUserProfile = async (updates: Partial<UserProfile>): Promise<void> => {
+    if (!user) throw new Error('No user logged in');
+    
+    const { data, error } = await supabase.auth.updateUser({
+      data: {
+        display_name: updates.display_name,
+        ...(updates.theme_preference && { theme_preference: updates.theme_preference })
+      }
+    });
+    
+    if (error) throw error;
+    
+    // Update the local user state with the new metadata
+    setUser(data.user);
+  };
+
+  // Get the user's theme preference from metadata
+  const getUserThemePreference = (): 'light' | 'dark' | null => {
+    if (!user) return null;
+    return user.user_metadata?.theme_preference || null;
+  };
+
+  // Update just the theme preference
+  const updateUserThemePreference = async (theme: 'light' | 'dark'): Promise<void> => {
+    if (!user) throw new Error('No user logged in');
+    
+    const { data, error } = await supabase.auth.updateUser({
+      data: {
+        theme_preference: theme
+      }
+    });
+    
+    if (error) throw error;
+    
+    // Update the local user state with the new metadata
+    setUser(data.user);
+  };
+
   const value = {
     user,
     loading,
@@ -84,6 +132,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     signOut,
     resetPassword,
     updatePassword,
+    updateUserProfile,
+    getUserThemePreference,
+    updateUserThemePreference
   };
 
   return (

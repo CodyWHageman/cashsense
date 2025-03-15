@@ -33,7 +33,7 @@ interface EditDialogState {
 
 interface MenuState {
   element: HTMLElement | null;
-  categoryId: string | null;
+  category: BudgetCategory | null;
 }
 
 interface DeleteConfirmationState {
@@ -55,10 +55,17 @@ function BudgetCategories({
   onCategoriesChange
 }: BudgetCategoriesProps) {
   const [editDialog, setEditDialog] = useState<EditDialogState>({ open: false, category: null });
-  const [menuAnchor, setMenuAnchor] = useState<MenuState>({ element: null, categoryId: null });
+  const [menuAnchor, setMenuAnchor] = useState<MenuState>({ element: null, category: null });
   const [deleteConfirmation, setDeleteConfirmation] = useState<DeleteConfirmationState>({
     open: false,
     expense: null
+  });
+  const [categoryDeleteConfirmation, setCategoryDeleteConfirmation] = useState<{
+    open: boolean;
+    category: BudgetCategory | null;
+  }>({
+    open: false,
+    category: null
   });
 
   const handleCategorySaved = (budgetCategory: BudgetCategory) => {
@@ -89,7 +96,7 @@ function BudgetCategories({
     onCategoriesChange(updatedCategories);
   };
 
-  const resetMenuAnchor = () => setMenuAnchor({ element: null, categoryId: null });
+  const resetMenuAnchor = () => setMenuAnchor({ element: null, category: null });
 
   const onDragEnd = async (result: DropResult) => {
     if (!result.destination || !currentBudget?.categories) return;
@@ -145,9 +152,9 @@ function BudgetCategories({
     await onExpensesChange([...(currentBudget?.expenses || []), newExpense]);
   };
 
-  const handleOpenCategoryMenu = (event: React.MouseEvent<HTMLElement>, categoryId: string) => {
+  const handleOpenCategoryMenu = (event: React.MouseEvent<HTMLElement>, category: BudgetCategory) => {
     event.stopPropagation(); // Prevent category collapse toggle
-    setMenuAnchor({ element: event.currentTarget, categoryId });
+    setMenuAnchor({ element: event.currentTarget, category });
   };
 
   function getNextExpenseSequenceNumber(categoryId: string): number {
@@ -243,7 +250,7 @@ function BudgetCategories({
                           categoryMenuButton={
                             <IconButton
                               size="small"
-                              onClick={(e) => handleOpenCategoryMenu(e, budgetCategory.category.id)}
+                              onClick={(e) => handleOpenCategoryMenu(e, budgetCategory)}
                               sx={{ 
                                 color: 'text.secondary',
                                 p: 0.5
@@ -275,8 +282,8 @@ function BudgetCategories({
       >
         <MenuItem
           onClick={() => {
-            if (menuAnchor.categoryId && currentBudget?.categories) {
-              const category = currentBudget.categories.find(c => c.category.id === menuAnchor.categoryId);
+            if (menuAnchor.category && currentBudget?.categories) {
+              const category = currentBudget.categories.find(c => c.category.id === menuAnchor.category?.id);
               if (category) {
                 setEditDialog({ open: true, category: category.category });
               }
@@ -288,8 +295,11 @@ function BudgetCategories({
         </MenuItem>
         <MenuItem
           onClick={() => {
-            if (menuAnchor.categoryId) {
-              handleDeleteCategory(menuAnchor.categoryId);
+            if (menuAnchor.category) {
+              setCategoryDeleteConfirmation({
+                open: true,
+                category: menuAnchor.category
+              });
             }
             resetMenuAnchor();
           }}
@@ -335,6 +345,35 @@ function BudgetCategories({
           </Button>
           <Button 
             onClick={handleConfirmDelete}
+            color="error"
+          >
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Category Delete Confirmation Dialog */}
+      <Dialog
+        open={categoryDeleteConfirmation.open}
+        onClose={() => setCategoryDeleteConfirmation({ open: false, category: null })}
+      >
+        <DialogTitle>Confirm Delete</DialogTitle>
+        <DialogContent>
+          Are you sure you want to delete category {categoryDeleteConfirmation.category?.category.name}?
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => setCategoryDeleteConfirmation({ open: false, category: null })}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={() => {
+              if (categoryDeleteConfirmation.category) {
+                handleDeleteCategory(categoryDeleteConfirmation.category.id);
+              }
+              setCategoryDeleteConfirmation({ open: false, category: null });
+            }}
             color="error"
           >
             Delete

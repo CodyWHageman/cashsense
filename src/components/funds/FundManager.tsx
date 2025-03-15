@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Button,
@@ -62,17 +62,24 @@ export function FundManager({ userId }: FundManagerProps) {
     fundName: ''
   });
   const [selectedFund, setSelectedFund] = useState<Fund | null>(null);
+  
+  // Add a ref to track loading state
+  const loadingFundsRef = useRef(false);
 
   const loadFunds = async () => {
-    if (!user?.id) return;
+    if (!user?.id || loadingFundsRef.current) return;
+    
+    loadingFundsRef.current = true;
     try {
       const userFunds = await getUserFunds(user.id);
       const fundsWithBalances = userFunds.map(calculateFundBalance);
       setFunds(fundsWithBalances);
-      setLoading(false);
     } catch (error) {
       console.error('Error loading funds:', error);
       enqueueSnackbar('Error loading funds', { variant: 'error' });
+    } finally {
+      setLoading(false);
+      loadingFundsRef.current = false;
     }
   };
 
@@ -129,6 +136,10 @@ export function FundManager({ userId }: FundManagerProps) {
       fundId: '',
       fundName: ''
     });
+    loadFunds();
+  };
+
+  const handleTransactionDeleted = () => {
     loadFunds();
   };
 
@@ -247,6 +258,7 @@ export function FundManager({ userId }: FundManagerProps) {
               <FundDetail
                 fund={selectedFund}
                 balance={calculateFundBalance(selectedFund).balance}
+                onTransactionDeleted={handleTransactionDeleted}
               />
             </Box>
           )}
@@ -266,6 +278,7 @@ export function FundManager({ userId }: FundManagerProps) {
             <FundDetail
               fund={selectedFund}
               balance={calculateFundBalance(selectedFund).balance}
+              onTransactionDeleted={handleTransactionDeleted}
             />
           </Box>
         )

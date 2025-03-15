@@ -11,7 +11,8 @@ const mapTransaction = (data: any): Transaction => ({
   description: data.description,
   expenseId: data.expense_id,
   createdAt: data.created_at,
-  updatedAt: data.updated_at
+  updatedAt: data.updated_at,
+  isSplit: data.is_split
 });
 
 const mapFundTransaction = (data: any): FundTransaction => ({
@@ -246,4 +247,40 @@ export const updateFundTransaction = async (
     .eq('id', fundTransactionId);
 
   if (error) throw error;
+};
+
+// Delete a fund transaction by deleting its related transactions
+export const deleteFundTransaction = async (fundTransaction: FundTransaction): Promise<void> => {
+  // Collect all transaction IDs to delete
+  const transactionIds: string[] = [];
+  
+  // Add the main transaction ID if it exists
+  if (fundTransaction.transactionId) {
+    transactionIds.push(fundTransaction.transactionId);
+  }
+  
+  // Add the transfer transaction ID if it exists
+  if (fundTransaction.transferTransactionId) {
+    transactionIds.push(fundTransaction.transferTransactionId);
+  }
+  
+  // If we have transactions to delete
+  if (transactionIds.length > 0) {
+    // Delete all related transactions in a single call
+    // This will cascade to delete the fund_transaction record
+    const { error } = await supabase
+      .from('transactions')
+      .delete()
+      .in('id', transactionIds);
+    
+    if (error) throw error;
+  } else {
+    // Fallback: If no transaction IDs (unusual case), delete the fund_transaction directly
+    const { error } = await supabase
+      .from('fund_transactions')
+      .delete()
+      .eq('id', fundTransaction.id);
+      
+    if (error) throw error;
+  }
 }; 

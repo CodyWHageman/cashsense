@@ -38,6 +38,11 @@ interface MenuState {
   incomeId: string | null;
 }
 
+interface DeleteConfirmationState {
+  open: boolean;
+  income: BudgetIncome | null;
+}
+
 function BudgetIncomeComponent({
   currentBudget,
   onIncomeClick,
@@ -53,6 +58,10 @@ function BudgetIncomeComponent({
     incomeId: null 
   });
   const [expanded, setExpanded] = useState(true);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<DeleteConfirmationState>({
+    open: false,
+    income: null
+  });
 
   const handleOpenMenu = (event: React.MouseEvent<HTMLButtonElement>, incomeId: string) => {
     event.stopPropagation();
@@ -297,8 +306,12 @@ function BudgetIncomeComponent({
         <MenuItem 
           onClick={() => {
             if (menuAnchor.incomeId) {
-              handleDeleteIncome(menuAnchor.incomeId);
+              setDeleteConfirmation({
+                open: true,
+                income: currentBudget.incomes?.find(i => i.id === menuAnchor.incomeId) || null
+              });
             }
+            handleCloseMenu();
           }}
         >
           <Delete fontSize="small" sx={{ mr: 1 }} />
@@ -353,6 +366,38 @@ function BudgetIncomeComponent({
             disabled={!editDialog.income?.name?.trim()}
           >
             Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteConfirmation.open}
+        onClose={() => setDeleteConfirmation({ open: false, income: null })}
+      >
+        <DialogTitle>Confirm Delete</DialogTitle>
+        <DialogContent>
+          Are you sure you want to delete income {deleteConfirmation.income?.name}?
+          <Typography variant="body2" color="error" sx={{ mt: 1 }}>
+            Note: This will also delete all associated transactions.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => setDeleteConfirmation({ open: false, income: null })}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={() => {
+              if (deleteConfirmation.income) {
+                handleDeleteIncome(deleteConfirmation.income.id);
+              }
+              setDeleteConfirmation({ open: false, income: null });
+            }}
+            color="error"
+          >
+            Delete
           </Button>
         </DialogActions>
       </Dialog>
