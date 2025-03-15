@@ -80,18 +80,18 @@ function BudgetCategories({
       setEditDialog({ open: false, category: null });
   };
 
-  const handleDeleteCategory = async (categoryId: string) => {
+  const handleDeleteCategory = async (budgetCategory: BudgetCategory) => {
     if (!currentBudget) return;
 
     try {
-      await deleteCategory(categoryId, currentBudget.id);
+      await deleteCategory(budgetCategory);
     } catch (error) {
       console.error('Error deleting category:', error);
       enqueueSnackbar(error instanceof Error ? error.message : 'Error while deleting category.', { variant: 'error' });
       return;
     }
-    enqueueSnackbar('Category deleted successfully.', { variant: 'success' });  
-    const updatedCategories = currentBudget.categories?.filter(c => c.category.id !== categoryId) || [];
+    enqueueSnackbar('Category ' + budgetCategory.category.name + ' deleted successfully.', { variant: 'success' });  
+    const updatedCategories = currentBudget.categories?.filter(c => c.id !== budgetCategory.id) || [];
 
     onCategoriesChange(updatedCategories);
   };
@@ -334,7 +334,7 @@ function BudgetCategories({
               </Typography>
             </>
           ) : (
-            'Are you sure you want to delete this expense?'
+            'Are you sure you want to delete expense: ' + deleteConfirmation.expense?.name + '?'
           )}
         </DialogContent>
         <DialogActions>
@@ -370,7 +370,7 @@ function BudgetCategories({
           <Button 
             onClick={() => {
               if (categoryDeleteConfirmation.category) {
-                handleDeleteCategory(categoryDeleteConfirmation.category.id);
+                handleDeleteCategory(categoryDeleteConfirmation.category);
               }
               setCategoryDeleteConfirmation({ open: false, category: null });
             }}

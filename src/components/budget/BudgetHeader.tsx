@@ -202,6 +202,7 @@ function BudgetHeader({ currentBudget, onMonthChange, selectedMonth, selectedYea
       console.log('Left to Budget is less than 0');
       fontColor = 'error.main';
       fontWeight = 'bold';
+      leftToBudgetText = 'Over Budget! ' + leftToBudget.toFixed(2);
     }
 
     if(leftToBudget === 0) {

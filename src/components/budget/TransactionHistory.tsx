@@ -11,10 +11,16 @@ import {
   styled,
   useTheme,
   Chip,
-  Icon
+  Icon,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button
 } from '@mui/material';
 import { CallSplitTwoTone, Delete } from '@mui/icons-material';
 import { Budget } from '../../models/Budget';
+import { Transaction } from '../../models/Transaction';
 import TransactionDialog from '../transactions/TransactionDialog';
 import { SwipeableList, SwipeableListItem } from '@sandstreamdev/react-swipeable-list';
 import { useResponsive } from '../../hooks/useResponsive';
@@ -47,6 +53,14 @@ function TransactionHistory({
     splitAmount?: number;
     isSplit?: boolean;
   }>(null);
+  
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    open: boolean;
+    transaction: Transaction | null;
+  }>({
+    open: false,
+    transaction: null
+  });
 
   const theme = useTheme();
   const { isMobile } = useResponsive();
@@ -120,6 +134,21 @@ function TransactionHistory({
     </Box>
   );
 
+  const handleDeleteClick = (e: React.MouseEvent, transaction: Transaction) => {
+    e.stopPropagation();
+    setDeleteConfirmation({
+      open: true,
+      transaction
+    });
+  };
+
+  const handleConfirmDelete = () => {
+    if (deleteConfirmation.transaction) {
+      onDeleteTransaction(deleteConfirmation.transaction.id);
+    }
+    setDeleteConfirmation({ open: false, transaction: null });
+  };
+
   if (isMobile) {
     return (
       <SwipeableList>
@@ -138,7 +167,7 @@ function TransactionHistory({
                   <Delete sx={{ color: 'white' }} />
                 </Box>
               ),
-              action: () => onDeleteTransaction(transaction.id)
+              action: () => setDeleteConfirmation({ open: true, transaction: transaction })
             }}
           >
             <StyledListItem
@@ -163,10 +192,7 @@ function TransactionHistory({
                 secondaryAction={
                   <IconButton 
                     edge="end" 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDeleteTransaction(transaction.id);
-                    }}
+                    onClick={(e) => handleDeleteClick(e, transaction)}
                     size="small"
                   >
                     <Delete />
@@ -195,6 +221,32 @@ function TransactionHistory({
           transaction={selectedTransaction}
         />
       )}
+
+      <Dialog
+        open={deleteConfirmation.open}
+        onClose={() => setDeleteConfirmation({ open: false, transaction: null })}
+      >
+        <DialogTitle>Confirm Delete</DialogTitle>
+        <DialogContent>
+          Are you sure you want to delete this transaction?
+          <Typography variant="body2" color="success.main" sx={{ mt: 1, textAlign: 'center' }}>
+            {deleteConfirmation.transaction?.description}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => setDeleteConfirmation({ open: false, transaction: null })}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleConfirmDelete}
+            color="error"
+          >
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
