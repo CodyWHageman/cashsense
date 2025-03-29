@@ -25,7 +25,6 @@ const mapCreateDTOToDBInsert = (income: BudgetIncomeCreateDTO): any => ({
 
 // Create a new income
 export const createIncome = async (income: BudgetIncomeCreateDTO): Promise<BudgetIncome> => {
-    console.log('Creating income:', income);
     const { data, error } = await supabase
     .from('budget_incomes')
     .insert([mapCreateDTOToDBInsert(income)])
@@ -37,7 +36,6 @@ export const createIncome = async (income: BudgetIncomeCreateDTO): Promise<Budge
 };
 
 export const createIncomes = async (incomes: BudgetIncomeCreateDTO[]): Promise<BudgetIncome[]> => {
-    console.log('Creating incomes:', incomes);
     const { data, error } = await supabase
     .from('budget_incomes')
     .insert(incomes.map(mapCreateDTOToDBInsert))

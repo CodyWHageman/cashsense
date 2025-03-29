@@ -1,19 +1,21 @@
-import React, { useState, Suspense } from 'react';
-import { CssBaseline, ThemeProvider, CircularProgress, Box } from '@mui/material';
+import React, { Suspense } from 'react';
+import { CircularProgress, Box } from '@mui/material';
 import { SnackbarProvider } from 'notistack';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { getDefaultTheme } from './theme';
-import { useAuth, AuthProvider } from './contexts/AuthContext';
+import { AuthProvider } from './contexts/AuthContext';
+import { ThemeProvider } from './contexts/ThemeContext';
+import { useAuth } from './contexts/AuthContext';
 import { MainLayout } from './components/layout/MainLayout';
-
+import { BudgetProvider } from './contexts/BudgetContext';
+import { FundProvider } from './contexts/FundContext';
 // Lazy load components
+const Login = React.lazy(() => import('./components/auth/Login'));
+const Signup = React.lazy(() => import('./components/auth/Signup'));
+const ResetPassword = React.lazy(() => import('./components/auth/ResetPassword'));
 const BudgetPage = React.lazy(() => import('./components/pages/BudgetPage'));
 const FundPage = React.lazy(() => import('./components/pages/FundPage'));
-const Login = React.lazy(() => import('./components/auth/Login'));
-const ResetPassword = React.lazy(() => import('./components/auth/ResetPassword'));
-const Signup = React.lazy(() => import('./components/auth/Signup'));
-const SettingsPage = React.lazy(() => import('./components/pages/SettingsPage'));
 const HelpPage = React.lazy(() => import('./components/pages/HelpPage'));
+const SettingsPage = React.lazy(() => import('./components/pages/SettingsPage'));
 
 // Loading component
 const LoadingFallback = () => (
@@ -23,7 +25,7 @@ const LoadingFallback = () => (
 );
 
 // Protected route wrapper
-const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
   const location = useLocation();
 
@@ -35,60 +37,78 @@ const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  return <MainLayout>{children}</MainLayout>;
+  return children;
 };
 
 function App() {
-  const [mode, setMode] = useState<'light' | 'dark'>('light');
-  const theme = getDefaultTheme(mode);
-  
-  const toggleColorMode = () => {
-    setMode((prevMode) => (prevMode === 'light' ? 'dark' : 'light'));
-  };
-
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
+    <BrowserRouter>
       <SnackbarProvider maxSnack={3}>
         <AuthProvider>
-          <BrowserRouter>
+          <ThemeProvider>
             <Suspense fallback={<LoadingFallback />}>
               <Routes>
                 <Route path="/login" element={<Login />} />
-                <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/signup" element={<Signup />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
                 
-                <Route path="/" element={
-                  <PrivateRoute>
-                    <BudgetPage />
-                  </PrivateRoute>
-                } />
+                <Route 
+                  path="/" 
+                  element={
+                    <PrivateRoute>
+                      <MainLayout>
+                        <BudgetProvider>
+                          <FundProvider>
+                            <BudgetPage />
+                          </FundProvider>
+                        </BudgetProvider>
+                      </MainLayout>
+                    </PrivateRoute>
+                  } 
+                />
                 
-                <Route path="/funds" element={
-                  <PrivateRoute>
-                    <FundPage />
-                  </PrivateRoute>
-                } />
+                <Route 
+                  path="/funds" 
+                  element={
+                    <PrivateRoute>
+                      <MainLayout>  
+                        <FundProvider>
+                          <FundPage />
+                        </FundProvider>
+                      </MainLayout>
+                    </PrivateRoute>
+                  } 
+                />
                 
-                <Route path="/help" element={
-                  <PrivateRoute>
-                    <HelpPage />
-                  </PrivateRoute>
-                } />
+                <Route 
+                  path="/help" 
+                  element={
+                    <PrivateRoute>
+                      <MainLayout>
+                        <HelpPage />
+                      </MainLayout>
+                    </PrivateRoute>
+                  } 
+                />
                 
-                <Route path="/settings" element={
-                  <PrivateRoute>
-                    <SettingsPage mode={mode} toggleColorMode={toggleColorMode} />
-                  </PrivateRoute>
-                } />
+                <Route 
+                  path="/settings" 
+                  element={
+                    <PrivateRoute>
+                      <MainLayout>
+                        <SettingsPage />
+                      </MainLayout>
+                    </PrivateRoute>
+                  } 
+                />
                 
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </Suspense>
-          </BrowserRouter>
+          </ThemeProvider>
         </AuthProvider>
       </SnackbarProvider>
-    </ThemeProvider>
+    </BrowserRouter>
   );
 }
 

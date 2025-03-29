@@ -49,7 +49,6 @@ export const createExpense = async (expense: BudgetExpenseCreateDTO): Promise<Bu
 };
 
 export const createExpenses = async (expenses: BudgetExpenseCreateDTO[]): Promise<BudgetExpense[]> => {
-    console.log('Creating expenses:', expenses);
     const { data, error } = await supabase
     .from('budget_expenses')
     .insert(expenses.map(mapCreateDTOToDBExpense))

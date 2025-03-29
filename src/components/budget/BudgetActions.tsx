@@ -1,5 +1,5 @@
 import { SpeedDial, SpeedDialAction } from '@mui/material';
-import { Add as AddIcon, CloudUpload, Category } from '@mui/icons-material';
+import { Add as AddIcon, CloudUpload, Category, AttachMoney } from '@mui/icons-material';
 import { useState } from 'react';
 import { Budget, BudgetCategory, Fund } from '../../models/Budget';
 import { Transaction } from '../../models/Transaction';
@@ -7,23 +7,21 @@ import TransactionImportModal from '../transactions/TransactionImportModal';
 import CategoryDialog from './CategoryDialog';
 import { useResponsive } from '../../hooks/useResponsive';
 import { createCategory } from '../../services/categoryService';
+import { useBudget } from '../../contexts/BudgetContext';
+import { AddTransactionDialog } from '../transactions/AddTransactionDialog';
 
 interface BudgetActionsProps {
-  currentBudget: Budget;
   funds: Fund[];
-  onTransactionsAdded: (transactions: Transaction[]) => void;
-  onCategoryAdded: (category: BudgetCategory) => void;
 }
 
 export function BudgetActions({
-  currentBudget,
-  funds,
-  onTransactionsAdded,
-  onCategoryAdded
+  funds
 }: BudgetActionsProps) {
   const { isMobile } = useResponsive();
+  const { currentBudget, handleCategoryAdded, handleTransactionsAdded } = useBudget();
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
+  const [isAddTransactionOpen, setIsAddTransactionOpen] = useState(false);
 
   const actions = [
     {
@@ -35,13 +33,13 @@ export function BudgetActions({
       icon: <CloudUpload />,
       name: 'Import Transactions',
       onClick: () => setIsImportModalOpen(true)
+    },
+    {
+      icon: <AttachMoney />,
+      name: 'Add Transaction',
+      onClick: () => setIsAddTransactionOpen(true)
     }
   ];
-
-  const handleCategoryAdded = (category: BudgetCategory) => {
-    onCategoryAdded(category);
-    setIsCategoryDialogOpen(false);
-  }
 
   return (
     <>
@@ -77,17 +75,29 @@ export function BudgetActions({
       <TransactionImportModal
         open={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
-        expenses={currentBudget.expenses || []}
-        incomes={currentBudget.incomes || []}
+        expenses={currentBudget?.expenses || []}
+        incomes={currentBudget?.incomes || []}
         funds={funds}
-        onTransactionsAdded={onTransactionsAdded}
+        onTransactionsAdded={handleTransactionsAdded}
       />
 
       <CategoryDialog
         open={isCategoryDialogOpen}
         onClose={() => setIsCategoryDialogOpen(false)}
-        onCategorySaved={handleCategoryAdded}
-        currentBudget={currentBudget}
+        onCategorySaved={(category) => {
+          handleCategoryAdded(category);
+          setIsCategoryDialogOpen(false);
+        }}
+      />
+
+      <AddTransactionDialog
+        open={isAddTransactionOpen}
+        onClose={() => setIsAddTransactionOpen(false)}
+        expenses={currentBudget?.expenses || []}
+        onTransactionAdded={(transaction) => {
+          handleTransactionsAdded([transaction]);
+          setIsAddTransactionOpen(false);
+        }}
       />
     </>
   );

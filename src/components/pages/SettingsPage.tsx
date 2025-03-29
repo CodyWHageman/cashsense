@@ -11,47 +11,29 @@ import {
   Divider
 } from '@mui/material';
 import { useAuth } from '../../contexts/AuthContext';
-import { getUserProfile, updateUserProfile } from '../../services/userService';
+import { useTheme } from '../../contexts/ThemeContext';
 import { useSnackbar } from 'notistack';
 import ImportTemplateManager from '../settings/ImportTemplateManager';
 
-
-interface SettingsProps {
-  mode: 'light' | 'dark';
-  toggleColorMode: () => void;
-}
-
-const SettingsPage: React.FC<SettingsProps> = ({ mode, toggleColorMode }) => {
-  const { user } = useAuth();
+const SettingsPage: React.FC = () => {
+  const { user, updateUserProfile } = useAuth();
+  const { mode, toggleColorMode } = useTheme();
   const { enqueueSnackbar } = useSnackbar();
   const [loading, setLoading] = useState(true);
   const [displayName, setDisplayName] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    const loadProfile = async () => {
-      if (!user?.id) return;
-      try {
-        const profile = await getUserProfile(user.id);
-        if (profile) {
-          setDisplayName(profile.display_name || '');
-        }
-      } catch (error) {
-        console.error('Error loading profile:', error);
-        enqueueSnackbar('Error loading profile', { variant: 'error' });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadProfile();
-  }, [user?.id]);
+    // Set display name directly from user metadata
+    setDisplayName(user?.user_metadata?.display_name || '');
+    setLoading(false);
+  }, [user]);
 
   const handleSave = async () => {
-    if (!user?.id) return;
+    if (!user) return;
     setSaving(true);
     try {
-      await updateUserProfile(user.id, { display_name: displayName });
+      await updateUserProfile({ display_name: displayName });
       enqueueSnackbar('Settings saved successfully', { variant: 'success' });
     } catch (error) {
       console.error('Error saving settings:', error);

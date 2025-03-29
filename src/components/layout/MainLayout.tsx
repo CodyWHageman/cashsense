@@ -56,6 +56,9 @@ export function MainLayout({ children }: MainLayoutProps) {
     navigate('/login');
   };
 
+  // Get display name directly from user metadata
+  const displayName = user?.user_metadata?.display_name || null;
+
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
       {!isMobile && (
@@ -64,6 +67,7 @@ export function MainLayout({ children }: MainLayoutProps) {
             currentView={currentView}
             setCurrentView={handleViewChange}
             userEmail={user?.email}
+            displayName={displayName}
             onUserMenuClick={handleUserMenuClick}
           />
         </Box>

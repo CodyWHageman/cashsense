@@ -80,14 +80,13 @@ export const updateExpenseCategory = async (
 };
 
 // Delete a category
-export const deleteCategory = async (id: string, budgetId: string): Promise<void> => {
-  console.log('Deleting category', id, 'for budget', budgetId);
+export const deleteCategory = async (budgetCategory: BudgetCategory): Promise<void> => {
   // Check if expenses exist for this category and budget
   const { data: expenses, error: expensesError } = await supabase
     .from('budget_expenses')
     .select('id')
-    .eq('category_id', id)
-    .eq('budget_id', budgetId);
+    .eq('category_id', budgetCategory.category.id)
+    .eq('budget_id', budgetCategory.budgetId);
 
   if (expensesError) throw expensesError;
 
@@ -98,13 +97,13 @@ export const deleteCategory = async (id: string, budgetId: string): Promise<void
   const { error: budgetCategoryError } = await supabase
     .from('budget_categories')
     .delete()
-    .eq('category_id', id)
-    .eq('budget_id', budgetId);
+    .eq('category_id', budgetCategory.category.id)
+    .eq('budget_id', budgetCategory.budgetId);
 
   if (budgetCategoryError) throw budgetCategoryError;
 
   //Check if category exists in other budgets
-  deleteExpenseCategoryIfNotInOtherBudgets(id);
+  deleteExpenseCategoryIfNotInOtherBudgets(budgetCategory.category.id);
 };
 
 const deleteExpenseCategoryIfNotInOtherBudgets = async (expenseCategoryId: string) => {

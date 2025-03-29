@@ -19,6 +19,7 @@ import { createTransaction, deleteTransaction } from '../../services/transaction
 import TransactionDialog from '../transactions/TransactionDialog';
 import { useResponsive } from '../../hooks/useResponsive';
 import { format } from 'date-fns';
+import { useBudget } from '../../contexts/BudgetContext';
 
 const DesktopPanel = styled(Box)(({ theme }) => ({
   width: '400px',
@@ -36,19 +37,16 @@ const DesktopPanel = styled(Box)(({ theme }) => ({
 interface IncomeDetailProps {
   income: BudgetIncome;
   onClose: () => void;
-  onDeleteTransaction: (transactionId: string) => void;
-  onIncomeUpdate: (updatedIncome: BudgetIncome) => void;
   open: boolean;
 }
 
 export function IncomeDetail({
   income,
   onClose,
-  onDeleteTransaction,
-  onIncomeUpdate,
   open
 }: IncomeDetailProps) {
   const { isMobile } = useResponsive();
+  const { handleIncomeUpdated, handleTransactionDeleted } = useBudget();
   const [transactionDialogOpen, setTransactionDialogOpen] = useState(false);
 
   const totalReceived = (income.transactions || []).reduce((sum, t) => sum + t.amount, 0);
@@ -62,7 +60,7 @@ export function IncomeDetail({
         incomeId: income.id
       });
 
-      onIncomeUpdate({...income, transactions: [...(income.transactions || []), newTransaction]}); // This will trigger a refresh
+      handleIncomeUpdated({...income, transactions: [...(income.transactions || []), newTransaction]}); // This will trigger a refresh
       setTransactionDialogOpen(false);
     } catch (error) {
       console.error('Error adding transaction:', error);
@@ -72,7 +70,7 @@ export function IncomeDetail({
   const handleDeleteTransaction = async (transactionId: string) => {
     try {
       await deleteTransaction(transactionId);
-      onDeleteTransaction(transactionId);
+      handleTransactionDeleted(transactionId);
     } catch (error) {
       console.error('Error deleting transaction:', error);
     }

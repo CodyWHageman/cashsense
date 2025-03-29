@@ -17,15 +17,13 @@ import {
   Paper,
 } from '@mui/material';
 import { Add, MoreVert, Edit, Delete, ExpandMore, LocalAtmTwoTone } from '@mui/icons-material';
-import { BudgetIncome, Budget } from '../../models/Budget';
+import { BudgetIncome } from '../../models/Budget';
 import { createIncome, updateIncome, deleteIncome } from '../../services/incomeService';
 import { getMonthName } from '../../utils/dateUtils';
+import { useBudget } from '../../contexts/BudgetContext';
 
 interface BudgetIncomeProps {
-  currentBudget: Budget;
   onIncomeClick: (income: BudgetIncome) => void;
-  onIncomeUpdate: (income: BudgetIncome) => void;
-  onIncomeDelete: (incomeId: string) => void;
 }
 
 interface EditDialogState {
@@ -38,12 +36,15 @@ interface MenuState {
   incomeId: string | null;
 }
 
+interface DeleteConfirmationState {
+  open: boolean;
+  income: BudgetIncome | null;
+}
+
 function BudgetIncomeComponent({
-  currentBudget,
-  onIncomeClick,
-  onIncomeUpdate,
-  onIncomeDelete
+  onIncomeClick
 }: BudgetIncomeProps) {
+  const { currentBudget, handleIncomeUpdated, handleIncomeDeleted } = useBudget();
   const [editDialog, setEditDialog] = useState<EditDialogState>({ 
     open: false, 
     income: null 
@@ -53,6 +54,10 @@ function BudgetIncomeComponent({
     incomeId: null 
   });
   const [expanded, setExpanded] = useState(true);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<DeleteConfirmationState>({
+    open: false,
+    income: null
+  });
 
   const handleOpenMenu = (event: React.MouseEvent<HTMLButtonElement>, incomeId: string) => {
     event.stopPropagation();
@@ -70,7 +75,7 @@ function BudgetIncomeComponent({
       income: income ? { ...income } : {
         name: '',
         amount: 0,
-        budgetId: currentBudget.id,
+        budgetId: currentBudget?.id || '',
         createdAt: new Date(),
         updatedAt: new Date(),
         frequency: 'monthly',
@@ -83,7 +88,7 @@ function BudgetIncomeComponent({
     handleCloseMenu();
     try {
       await deleteIncome(incomeId);
-      onIncomeDelete(incomeId);
+      handleIncomeDeleted(incomeId);
     } catch (error) {
       console.error('Error deleting income:', error);
     }
@@ -91,32 +96,31 @@ function BudgetIncomeComponent({
 
   const handleSave = async () => {
     if (!editDialog.income?.name) return;
+    if (!currentBudget) return;
 
     try {
       let updatedIncome;
       if ('id' in editDialog.income && editDialog.income.id) {
         // Update existing income
-        console.log('Updating income:', editDialog.income);
         updatedIncome = await updateIncome(editDialog.income.id, {
           ...editDialog.income,
           updatedAt: new Date()
         });
       } else {
         // Create new income
-        console.log('Creating income:', editDialog.income);
         const newIncome = {
           name: editDialog.income.name,
           amount: editDialog.income.amount || 0,
           frequency: editDialog.income.frequency || 'monthly',
           expectedDate: editDialog.income.expectedDate || new Date(),
-          budgetId: currentBudget.id,
+          budgetId: currentBudget?.id || '',
           createdAt: new Date(),
           updatedAt: new Date()
         };
         updatedIncome = await createIncome(newIncome);
       }
 
-      onIncomeUpdate(updatedIncome);
+      handleIncomeUpdated(updatedIncome);
       setEditDialog({ open: false, income: null });
     } catch (error) {
       console.error('Error saving income:', error);
@@ -124,14 +128,14 @@ function BudgetIncomeComponent({
   };
 
   const getIncomeReceived = (incomeId: string): number => {
-    return currentBudget.incomes
+    return currentBudget?.incomes
       ?.find(t => t.id === incomeId)
       ?.transactions
       ?.reduce((sum, t) => sum + t.amount, 0) || 0;
   };
 
-  const totalPlanned = currentBudget.incomes?.reduce((sum, income) => sum + income.amount, 0) || 0;
-  const totalReceived = currentBudget.incomes?.reduce((sum, income) => sum + getIncomeReceived(income.id), 0) || 0;
+  const totalPlanned = currentBudget?.incomes?.reduce((sum, income) => sum + income.amount, 0) || 0;
+  const totalReceived = currentBudget?.incomes?.reduce((sum, income) => sum + getIncomeReceived(income.id), 0) || 0;
 
   const handleToggle = () => {
     setExpanded(!expanded);
@@ -162,7 +166,7 @@ function BudgetIncomeComponent({
           />
           <LocalAtmTwoTone sx={{ mr: 1, color: 'primary.main' }} />
           <Typography variant="subtitle1">
-            Income for {getMonthName(currentBudget.month)}
+            Income for {getMonthName(currentBudget?.month || 0)}
           </Typography>
         </Box>
 
@@ -178,7 +182,7 @@ function BudgetIncomeComponent({
 
       <Collapse in={expanded}>
         <List sx={{ py: 0 }}>
-          {currentBudget.incomes?.map(income => (
+          {currentBudget?.incomes?.map(income => (
             <ListItem
               key={income.id}
               sx={{
@@ -285,7 +289,7 @@ function BudgetIncomeComponent({
       >
         <MenuItem 
           onClick={() => {
-            const income = currentBudget.incomes?.find(i => i.id === menuAnchor.incomeId);
+            const income = currentBudget?.incomes?.find(i => i.id === menuAnchor.incomeId);
             if (income) {
               handleEditIncome(income);
             }
@@ -297,8 +301,12 @@ function BudgetIncomeComponent({
         <MenuItem 
           onClick={() => {
             if (menuAnchor.incomeId) {
-              handleDeleteIncome(menuAnchor.incomeId);
+              setDeleteConfirmation({
+                open: true,
+                income: currentBudget?.incomes?.find(i => i.id === menuAnchor.incomeId) || null
+              });
             }
+            handleCloseMenu();
           }}
         >
           <Delete fontSize="small" sx={{ mr: 1 }} />
@@ -353,6 +361,38 @@ function BudgetIncomeComponent({
             disabled={!editDialog.income?.name?.trim()}
           >
             Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteConfirmation.open}
+        onClose={() => setDeleteConfirmation({ open: false, income: null })}
+      >
+        <DialogTitle>Confirm Delete</DialogTitle>
+        <DialogContent>
+          Are you sure you want to delete income {deleteConfirmation.income?.name}?
+          <Typography variant="body2" color="error" sx={{ mt: 1 }}>
+            Note: This will also delete all associated transactions.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => setDeleteConfirmation({ open: false, income: null })}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={() => {
+              if (deleteConfirmation.income) {
+                handleDeleteIncome(deleteConfirmation.income.id);
+              }
+              setDeleteConfirmation({ open: false, income: null });
+            }}
+            color="error"
+          >
+            Delete
           </Button>
         </DialogActions>
       </Dialog>

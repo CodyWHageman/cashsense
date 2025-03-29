@@ -116,8 +116,6 @@ export const getBudgetByMonthAndYear = async (month: number, year: number, userI
   if (error?.details?.includes('The result contains 0 rows')) return null;
   if (error) throw error;
 
-  console.log("budget data", data);
-
   return data ? mapBudget(data) : null;
 };
 

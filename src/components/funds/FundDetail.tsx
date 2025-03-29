@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Paper,
@@ -7,18 +7,56 @@ import {
   ListItem,
   ListItemText,
   Divider,
-  Chip
+  Chip,
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button
 } from '@mui/material';
 import { Fund } from '../../models/Budget';
 import { format } from 'date-fns';
-import { Warning, CheckCircle } from '@mui/icons-material';
+import { Warning, CheckCircle, Delete } from '@mui/icons-material';
+import { deleteFundTransaction } from '../../services/fundService';
+import { FundTransaction } from '../../models/Transaction';
+import { useFund } from '../../contexts/FundContext';
+import { FundWithBalance } from '../../utils/fundUtils';
 
 interface FundDetailProps {
-  fund: Fund;
-  balance: number;
+  fund: FundWithBalance;
 }
 
-const FundDetail: React.FC<FundDetailProps> = ({ fund, balance }) => {
+const FundDetail: React.FC<FundDetailProps> = ({ fund }) => {
+  const { deleteFundTransactionAndRefresh } = useFund();
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    open: boolean;
+    transaction: FundTransaction | null;
+  }>({
+    open: false,
+    transaction: null
+  });
+
+  const handleDeleteClick = (transaction: FundTransaction, event: React.MouseEvent) => {
+    event.stopPropagation();
+    setDeleteConfirmation({
+      open: true,
+      transaction
+    });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirmation.transaction) return;
+    
+    try {
+      await deleteFundTransactionAndRefresh(deleteConfirmation.transaction);
+    } catch (error) {
+      console.error('Error deleting fund transaction:', error);
+    } finally {
+      setDeleteConfirmation({ open: false, transaction: null });
+    }
+  };
+
   return (
     <Paper sx={{ p: 2, height: '100%' }}>
       <Typography variant="h6" gutterBottom>
@@ -29,8 +67,8 @@ const FundDetail: React.FC<FundDetailProps> = ({ fund, balance }) => {
         <Typography variant="subtitle2" color="text.secondary">
           Current Balance
         </Typography>
-        <Typography variant="h4" color={balance >= 0 ? 'success.main' : 'error.main'}>
-          ${balance.toFixed(2)}
+        <Typography variant="h4" color={fund.balance >= 0 ? 'success.main' : 'error.main'}>
+          ${fund.balance.toFixed(2)}
         </Typography>
       </Box>
 
@@ -78,6 +116,13 @@ const FundDetail: React.FC<FundDetailProps> = ({ fund, balance }) => {
                     </>
                   }
                 />
+                <IconButton 
+                  edge="end" 
+                  size="small"
+                  onClick={(e) => handleDeleteClick(ft, e)}
+                >
+                  <Delete />
+                </IconButton>
               </ListItem>
               <Divider component="li" />
             </React.Fragment>
@@ -88,6 +133,31 @@ const FundDetail: React.FC<FundDetailProps> = ({ fund, balance }) => {
           No transactions yet
         </Typography>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteConfirmation.open}
+        onClose={() => setDeleteConfirmation({ open: false, transaction: null })}
+      >
+        <DialogTitle>Confirm Delete</DialogTitle>
+        <DialogContent>
+          Are you sure you want to delete this transaction?
+          {deleteConfirmation.transaction?.transaction && (
+            <Typography color="text.secondary" sx={{ mt: 1 }}>
+              {deleteConfirmation.transaction.transaction.description} - 
+              ${deleteConfirmation.transaction.transaction.amount.toFixed(2)}
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteConfirmation({ open: false, transaction: null })}>
+            Cancel
+          </Button>
+          <Button onClick={handleConfirmDelete} color="error">
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Paper>
   );
 };
