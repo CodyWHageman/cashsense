@@ -30,6 +30,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useConfirm } from 'material-ui-confirm';
 import { useSnackbar } from 'notistack';
 import { useResponsive } from '../../hooks/useResponsive';
+import { useFund } from '../../contexts/FundContext';
 
 interface FundManagerProps {
   userId: string;
@@ -53,39 +54,21 @@ export function FundManager({ userId }: FundManagerProps) {
   const confirm = useConfirm();
   const { enqueueSnackbar } = useSnackbar();
   
-  const [funds, setFunds] = useState<Fund[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { 
+    funds, 
+    loading, 
+    createNewFund,
+    updateExistingFund,
+    deleteExistingFund
+  } = useFund();
+  
   const [editDialog, setEditDialog] = useState<EditDialogState>({ open: false, fund: {} });
   const [transactionDialog, setTransactionDialog] = useState<TransactionDialogState>({
     open: false,
     fundId: '',
     fundName: ''
   });
-  const [selectedFund, setSelectedFund] = useState<Fund | null>(null);
-  
-  // Add a ref to track loading state
-  const loadingFundsRef = useRef(false);
-
-  const loadFunds = async () => {
-    if (!user?.id || loadingFundsRef.current) return;
-    
-    loadingFundsRef.current = true;
-    try {
-      const userFunds = await getUserFunds(user.id);
-      const fundsWithBalances = userFunds.map(calculateFundBalance);
-      setFunds(fundsWithBalances);
-    } catch (error) {
-      console.error('Error loading funds:', error);
-      enqueueSnackbar('Error loading funds', { variant: 'error' });
-    } finally {
-      setLoading(false);
-      loadingFundsRef.current = false;
-    }
-  };
-
-  useEffect(() => {
-    loadFunds();
-  }, [userId]);
+  const [selectedFund, setSelectedFund] = useState<FundWithBalance | null>(null);
 
   const handleEditFund = (fund?: Fund) => {
     setEditDialog({
@@ -97,12 +80,11 @@ export function FundManager({ userId }: FundManagerProps) {
   const handleSaveFund = async (fund: Fund) => {
     try {
       if (fund.id) {
-        await updateFund(fund.id, fund);
+        await updateExistingFund(fund.id, fund);
       } else if (fund.name && fund.targetAmount) {
-        await createFund({ ...fund, userId } as Omit<Fund, 'id'>);
+        await createNewFund({ ...fund, userId } as Omit<Fund, 'id'>);
       }
       setEditDialog({ open: false, fund: {} });
-      loadFunds();
     } catch (error) {
       console.error('Error saving fund:', error);
     }
@@ -111,11 +93,10 @@ export function FundManager({ userId }: FundManagerProps) {
   const handleDeleteFund = async (fundId: string) => {
     if (window.confirm('Are you sure you want to delete this fund?')) {
       try {
-        await deleteFund(fundId);
+        await deleteExistingFund(fundId);
         if (selectedFund?.id === fundId) {
           setSelectedFund(null);
         }
-        loadFunds();
       } catch (error) {
         console.error('Error deleting fund:', error);
       }
@@ -136,14 +117,9 @@ export function FundManager({ userId }: FundManagerProps) {
       fundId: '',
       fundName: ''
     });
-    loadFunds();
   };
 
-  const handleTransactionDeleted = () => {
-    loadFunds();
-  };
-
-  const renderFundCard = (fund: Fund) => {
+  const renderFundCard = (fund: FundWithBalance) => {
     const { balance } = calculateFundBalance(fund);
     const progress = (balance / fund.targetAmount) * 100;
 
@@ -255,11 +231,7 @@ export function FundManager({ userId }: FundManagerProps) {
         >
           {selectedFund && (
             <Box sx={{ p: 2 }}>
-              <FundDetail
-                fund={selectedFund}
-                balance={calculateFundBalance(selectedFund).balance}
-                onTransactionDeleted={handleTransactionDeleted}
-              />
+              <FundDetail fund={selectedFund} />
             </Box>
           )}
         </Drawer>
@@ -277,8 +249,6 @@ export function FundManager({ userId }: FundManagerProps) {
           }}>
             <FundDetail
               fund={selectedFund}
-              balance={calculateFundBalance(selectedFund).balance}
-              onTransactionDeleted={handleTransactionDeleted}
             />
           </Box>
         )

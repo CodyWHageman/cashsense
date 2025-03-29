@@ -8,6 +8,7 @@ import { KeyboardArrowUp, KeyboardArrowDown } from '@mui/icons-material';
 import { useState } from 'react';
 import TransactionHistory from './TransactionHistory';
 import { TabContext, TabPanel } from '@mui/lab';
+import { useBudget } from '../../contexts/BudgetContext';
 
 const DesktopPanel = styled(Box)(({ theme }) => ({
   backgroundColor: theme.palette.background.paper,
@@ -22,34 +23,27 @@ const DesktopPanel = styled(Box)(({ theme }) => ({
 }));
 
 interface BudgetDetailPanelProps {
-  currentBudget: Budget;
   selectedIncome: BudgetIncome | null;
   selectedExpense: BudgetExpense | null;
   selectedCategory?: ExpenseCategory;
   onDetailPanelClose: () => void;
-  onDeleteTransaction: (transactionId: string) => void;
-  onIncomeUpdate: (updatedIncome: BudgetIncome) => void;
-  onExpenseUpdate: (updatedExpense: BudgetExpense) => void;
   open: boolean;
 }
 
 export function BudgetDetailPanel({
-  currentBudget,
   selectedIncome,
   selectedExpense,
   selectedCategory,
   onDetailPanelClose,
-  onDeleteTransaction,
-  onIncomeUpdate,
-  onExpenseUpdate,
   open
 }: BudgetDetailPanelProps) {
   const { isMobile } = useResponsive();
+  const { currentBudget } = useBudget();
   const [showMobilePanel, setShowMobilePanel] = useState(false);
   const [tabValue, setTabValue] = useState('0');
-  const expenses = currentBudget.expenses || [];
-  const incomes = currentBudget.incomes || [];
-  const categories = currentBudget.categories || [];
+  const expenses = currentBudget?.expenses || [];
+  const incomes = currentBudget?.incomes || [];
+  const categories = currentBudget?.categories || [];
 
   const detailContent = (
     <Box sx={{ p: 2, height: '100%', overflow: 'auto' }}>
@@ -70,10 +64,7 @@ export function BudgetDetailPanel({
           </TabPanel>
           <TabPanel value="1" sx={{ p: 0 }}>
             <Box>
-              <TransactionHistory
-                currentBudget={currentBudget}
-                onDeleteTransaction={onDeleteTransaction}
-              />
+              <TransactionHistory />
             </Box>
           </TabPanel>
         </TabContext>
@@ -83,8 +74,6 @@ export function BudgetDetailPanel({
         <IncomeDetail
           income={selectedIncome}
           onClose={onDetailPanelClose}
-          onDeleteTransaction={onDeleteTransaction}
-          onIncomeUpdate={onIncomeUpdate}
           open={open}
         />
       )}
@@ -93,10 +82,7 @@ export function BudgetDetailPanel({
         <ExpenseDetail
           expense={selectedExpense}
           category={selectedCategory}
-          currentBudget={currentBudget}
           onClose={onDetailPanelClose}
-          onDeleteTransaction={onDeleteTransaction}
-          onExpenseUpdate={onExpenseUpdate}
           open={open}
         />
       )}

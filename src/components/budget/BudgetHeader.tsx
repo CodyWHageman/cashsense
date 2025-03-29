@@ -6,7 +6,7 @@ import { Budget } from '../../models/Budget';
 import { format } from 'date-fns';
 import { checkBudgetsExist } from '../../services/budgetService';
 import { calculateLeftToBudget } from '../../utils/calculator';
-
+import { useBudget } from '../../contexts/BudgetContext';
 const Header = styled(Box)(({ theme }) => ({
     width: '800px',
     maxWidth: '100%',
@@ -30,9 +30,10 @@ interface BudgetHeaderProps {
   selectedYear: number;
 }
 
-function BudgetHeader({ currentBudget, onMonthChange, selectedMonth, selectedYear } : BudgetHeaderProps) {  
+function BudgetHeader() {  
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const { user } = useAuth();
+  const { currentBudget, selectedMonth, selectedYear, handleMonthChange } = useBudget();
   const [budgetExists, setBudgetExists] = useState<Record<string, boolean>>({});
   
   // Add a ref to track if we're checking budgets
@@ -85,23 +86,23 @@ function BudgetHeader({ currentBudget, onMonthChange, selectedMonth, selectedYea
 
   const handlePreviousMonth = () => {
     if (selectedMonth === 0) {
-      onMonthChange(11, selectedYear - 1);
+      handleMonthChange(11, selectedYear - 1);
     } else {
-      onMonthChange(selectedMonth - 1, selectedYear);
+      handleMonthChange(selectedMonth - 1, selectedYear);
     }
   };
 
   const handleNextMonth = () => {
     if (selectedMonth === 11) {
-      onMonthChange(0, selectedYear + 1);
+      handleMonthChange(0, selectedYear + 1);
     } else {
-      onMonthChange(selectedMonth + 1, selectedYear);
+      handleMonthChange(selectedMonth + 1, selectedYear);
     }
   };
 
   const handleTodayClick = () => {
     const today = new Date();
-    onMonthChange(today.getMonth(), today.getFullYear());
+    handleMonthChange(today.getMonth(), today.getFullYear());
   };
 
   const handleMonthSelectorClick = (event: React.MouseEvent<HTMLElement>) => {
@@ -113,7 +114,7 @@ function BudgetHeader({ currentBudget, onMonthChange, selectedMonth, selectedYea
   };
 
   const handleMonthYearSelect = (month: number, year: number) => {
-    onMonthChange(month, year);
+    handleMonthChange(month, year);
     handleMonthSelectorClose();
   };
 
@@ -199,14 +200,12 @@ function BudgetHeader({ currentBudget, onMonthChange, selectedMonth, selectedYea
     let leftToBudgetText = `${leftToBudget.toFixed(2)} Left to Budget`;
 
     if (leftToBudget < 0) {
-      console.log('Left to Budget is less than 0');
       fontColor = 'error.main';
       fontWeight = 'bold';
       leftToBudgetText = 'Over Budget! ' + leftToBudget.toFixed(2);
     }
 
     if(leftToBudget === 0) {
-      console.log('Budget Met');
       fontColor = 'success.main';
       fontWeight = 'bold';
       leftToBudgetText = 'Every Dollar Has A Job!';

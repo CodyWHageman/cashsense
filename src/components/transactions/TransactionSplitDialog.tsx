@@ -17,27 +17,28 @@ import { Add, Remove } from '@mui/icons-material';
 import { Transaction, TransactionSplitDTO } from '../../models/Transaction';
 import { BudgetExpense } from '../../models/Budget';
 import { ExpenseSearchBox } from '../budget/ExpenseSearchBox';
+import { useBudget } from '../../contexts/BudgetContext';
 
 interface TransactionSplitDialogProps {
   open: boolean;
   onClose: () => void;
   transaction: Transaction;
-  expenses: BudgetExpense[];
-  onSplit: (splits: TransactionSplitDTO) => Promise<void>;
+  onSubmit: (splits: TransactionSplitDTO) => void;
 }
 
 export function TransactionSplitDialog({
   open,
   onClose,
   transaction,
-  expenses,
-  onSplit
+  onSubmit
 }: TransactionSplitDialogProps) {
   const [splits, setSplits] = useState([
     { amount: transaction.amount, expenseId: '' }
   ]);
   const [error, setError] = useState('');
+  const { currentBudget } = useBudget();
 
+  const expenses = currentBudget?.expenses || [];
   const totalSplit = splits.reduce((sum, split) => sum + (split.amount || 0), 0);
   const remainingAmount = transaction.amount - totalSplit;
 
@@ -49,7 +50,7 @@ export function TransactionSplitDialog({
     setSplits(splits.filter((_, i) => i !== index));
   };
 
-  const handleSplitSubmit = async () => {
+  const handleSplitSubmit = () => {
     if (Math.abs(remainingAmount) > 0.01) {
       setError('Split amounts must equal the total transaction amount');
       return;
@@ -60,7 +61,7 @@ export function TransactionSplitDialog({
       return;
     }
 
-    await onSplit({
+    onSubmit({
       parentTransactionId: transaction.id,
       splits
     });

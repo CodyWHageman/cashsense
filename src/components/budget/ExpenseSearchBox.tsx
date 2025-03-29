@@ -1,6 +1,6 @@
 import React from 'react';
 import { Autocomplete, TextField, Box } from '@mui/material';
-import { BudgetExpense } from '../models/Budget';
+import { BudgetExpense } from '../../models/Budget';
 
 interface ExpenseSearchBoxProps {
   expenses: BudgetExpense[];

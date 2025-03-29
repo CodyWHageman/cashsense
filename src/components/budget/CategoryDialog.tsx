@@ -14,6 +14,7 @@ import {
 import { Circle as CircleIcon, ColorLens as ColorLensIcon } from '@mui/icons-material';
 import { Budget, BudgetCategory } from '../../models/Budget';
 import { createCategory } from '../../services/categoryService';
+import { useBudget } from '../../contexts/BudgetContext';
 
 // Predefined color palette
 const colorPalette = [
@@ -28,10 +29,10 @@ interface CategoryDialogProps {
   onClose: () => void;
   onCategorySaved: (budgetCategory: BudgetCategory) => void;
   initialCategory?: { name: string; color: string } | null;
-  currentBudget: Budget;
 }
 
-export default function CategoryDialog({ open, onClose, onCategorySaved, initialCategory, currentBudget }: CategoryDialogProps) {
+export default function CategoryDialog({ open, onClose, onCategorySaved, initialCategory }: CategoryDialogProps) {
+  const { currentBudget } = useBudget();
   const [category, setCategory] = React.useState(initialCategory || { name: '', color: colorPalette[0] });
   const colorInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -42,6 +43,11 @@ export default function CategoryDialog({ open, onClose, onCategorySaved, initial
   }, [initialCategory]);
 
   const handleSave = async () => {
+    if (!currentBudget){
+      console.error('No current budget found');
+      return;
+    }
+
     const categoriesLength = currentBudget?.categories?.length || 0;
     const sequenceNumber = categoriesLength + 1;
     const newCategory = await createCategory({ name: category.name, color: category.color, userId: currentBudget.userId }, currentBudget.id, sequenceNumber);

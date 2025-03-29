@@ -25,7 +25,10 @@ import TransactionDialog from '../transactions/TransactionDialog';
 import { SwipeableList, SwipeableListItem } from '@sandstreamdev/react-swipeable-list';
 import { useResponsive } from '../../hooks/useResponsive';
 import { format } from 'date-fns';
-
+import TransactionList from '../transactions/TransactionList';
+import { useBudget } from '../../contexts/BudgetContext';
+import { deleteTransaction } from '../../services/transactionService';
+import { useSnackbar } from 'notistack';
 const StyledListItem = styled(ListItem)(({ theme }) => ({
   '&:hover': {
     backgroundColor: theme.palette.action.hover,
@@ -33,26 +36,9 @@ const StyledListItem = styled(ListItem)(({ theme }) => ({
   cursor: 'pointer',
 }));
 
-interface TransactionHistoryProps {
-  currentBudget: Budget;
-  onDeleteTransaction: (transactionId: string) => void;
-}
-
-function TransactionHistory({ 
-  currentBudget,
-  onDeleteTransaction 
-}: TransactionHistoryProps) {
-  const [selectedTransaction, setSelectedTransaction] = useState<null | {
-    date: Date;
-    description: string;
-    amount: number;
-    categoryName: string;
-    sourceName: string;
-    type: 'income' | 'expense';
-    categoryColor?: string;
-    splitAmount?: number;
-    isSplit?: boolean;
-  }>(null);
+function TransactionHistory() {
+  const { currentBudget, handleTransactionDeleted } = useBudget();
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     open: boolean;
@@ -62,42 +48,40 @@ function TransactionHistory({
     transaction: null
   });
 
-  const theme = useTheme();
+  const { enqueueSnackbar } = useSnackbar();
   const { isMobile } = useResponsive();
 
   // Get all transactions from both expenses and incomes
-  const allTransactions = [
-    ...(currentBudget.expenses || []).flatMap(expense => 
-      [
-        ...(expense.transactions || []).map(t => ({
-          ...t,
-          categoryName: currentBudget.categories?.find(c => c.category.id === expense.categoryId)?.category.name || 'Unknown',
-          categoryColor: currentBudget.categories?.find(c => c.category.id === expense.categoryId)?.category.color,
-          sourceName: expense.name,
-          type: 'expense' as const
-        })),
-        ...(expense.splitTransactions || []).map(split => ({
-          ...split.parentTransaction,
-          splitAmount: split.splitAmount,
-          categoryName: currentBudget.categories?.find(c => c.category.id === expense.categoryId)?.category.name || 'Unknown',
-          categoryColor: currentBudget.categories?.find(c => c.category.id === expense.categoryId)?.category.color,
-          sourceName: expense.name,
-          type: 'expense' as const,
-          isSplit: true
-        }))
-      ]
-    ),
-    ...(currentBudget.incomes || []).flatMap(income => 
-      (income.transactions || []).map(t => ({
-        ...t,
-        categoryName: 'Income',
-        categoryColor: '#4caf50', // Green color for income
-        sourceName: income.name,
-        type: 'income' as const
-      }))
-    )
-  ].sort((a, b) => b.date.getTime() - a.date.getTime()); // Sort by date, newest first
+  const allTransactions: Transaction[] = [
+    ...(currentBudget?.incomes || []).flatMap(income => (income.transactions || [])),
+    ...(currentBudget?.expenses || []).flatMap(expense => (expense.transactions || [])),
+    // First, collect all transactions from incomes and expenses
+  ];
 
+  // Then, process split transactions to add distinct parent transactions or update existing ones
+  (currentBudget?.expenses || []).flatMap(expense => 
+    (expense.splitTransactions || []).flatMap(st => {
+      const parentTransaction = st.parentTransaction;
+      if (parentTransaction && !allTransactions.some(t => t.id === parentTransaction.id)) {
+        const newParentTransaction: Transaction = {
+          ...parentTransaction,
+          splits: [st]          
+        };
+        allTransactions.push(newParentTransaction); // Add the new parent transaction to the list
+      } else {
+        const parentTransactionIndex = allTransactions.findIndex(t => t.id === parentTransaction?.id);
+        if (parentTransactionIndex !== -1) {
+          allTransactions[parentTransactionIndex].splits = allTransactions[parentTransactionIndex].splits || [];
+          allTransactions[parentTransactionIndex].splits.push(st);
+        }
+      }
+      return [];
+    })
+  );
+
+  // Finally, sort the transactions by date, newest first
+  allTransactions.sort((a, b) => b.date.getTime() - a.date.getTime());
+  
   const formatDate = (date: Date) => {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
@@ -142,9 +126,16 @@ function TransactionHistory({
     });
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (deleteConfirmation.transaction) {
-      onDeleteTransaction(deleteConfirmation.transaction.id);
+      try {
+        await deleteTransaction(deleteConfirmation.transaction.id);
+        handleTransactionDeleted(deleteConfirmation.transaction.id);
+        enqueueSnackbar('Transaction deleted successfully', { variant: 'success' });
+      } catch (error) {
+        console.error('Error deleting transaction:', error);
+        enqueueSnackbar('Error deleting transaction', { variant: 'error' });
+      }
     }
     setDeleteConfirmation({ open: false, transaction: null });
   };
@@ -184,34 +175,7 @@ function TransactionHistory({
   return (
     <Box>
       <Paper className="budget-list-container">
-        <List sx={{ py: 0 }}>
-          {allTransactions.map((transaction) => (
-            <React.Fragment key={transaction.id}>
-              <StyledListItem
-                onClick={() => setSelectedTransaction(transaction)}
-                secondaryAction={
-                  <IconButton 
-                    edge="end" 
-                    onClick={(e) => handleDeleteClick(e, transaction)}
-                    size="small"
-                  >
-                    <Delete />
-                  </IconButton>
-                }
-              >
-                {renderTransaction(transaction)}
-              </StyledListItem>
-              <Divider component="li" />
-            </React.Fragment>
-          ))}
-          {allTransactions.length === 0 && (
-            <ListItem>
-              <Typography color="text.secondary" sx={{ width: '100%', textAlign: 'center', py: 2 }}>
-                No transactions yet
-              </Typography>
-            </ListItem>
-          )}
-        </List>
+        <TransactionList transactions={allTransactions} />
       </Paper>
 
       {selectedTransaction && (

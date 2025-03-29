@@ -25,6 +25,7 @@ import { createExpense, deleteExpense, updateExpense } from '../../services/expe
 import CategoryDialog from './CategoryDialog';
 import BudgetCategoryGroup from './BudgetCategoryGroup';
 import { enqueueSnackbar } from 'notistack';
+import { useBudget } from '../../contexts/BudgetContext';
 
 interface EditDialogState {
   open: boolean;
@@ -42,18 +43,13 @@ interface DeleteConfirmationState {
 }
 
 interface BudgetCategoriesProps {
-  currentBudget: Budget;
-  onExpensesChange: (expenses: BudgetExpense[]) => void;
-  onCategoriesChange: (categories: BudgetCategory[]) => void;
   onExpenseClick: (expense: BudgetExpense) => void;
 }
 
 function BudgetCategories({ 
-  currentBudget, 
-  onExpensesChange, 
   onExpenseClick,
-  onCategoriesChange
 }: BudgetCategoriesProps) {
+  const { currentBudget, handleExpensesChange, handleCategoriesChange } = useBudget();
   const [editDialog, setEditDialog] = useState<EditDialogState>({ open: false, category: null });
   const [menuAnchor, setMenuAnchor] = useState<MenuState>({ element: null, category: null });
   const [deleteConfirmation, setDeleteConfirmation] = useState<DeleteConfirmationState>({
@@ -75,7 +71,7 @@ function BudgetCategories({
         c.category.id === budgetCategory.category.id ? budgetCategory : c
       );  
 
-      onCategoriesChange(updatedCategories || []);
+      handleCategoriesChange(updatedCategories || []);
 
       setEditDialog({ open: false, category: null });
   };
@@ -93,7 +89,7 @@ function BudgetCategories({
     enqueueSnackbar('Category ' + budgetCategory.category.name + ' deleted successfully.', { variant: 'success' });  
     const updatedCategories = currentBudget.categories?.filter(c => c.id !== budgetCategory.id) || [];
 
-    onCategoriesChange(updatedCategories);
+    handleCategoriesChange(updatedCategories);
   };
 
   const resetMenuAnchor = () => setMenuAnchor({ element: null, category: null });
@@ -112,7 +108,7 @@ function BudgetCategories({
     }));
 
     // Update the local state
-    await onCategoriesChange(updatedCategories);
+    handleCategoriesChange(updatedCategories);
 
     // Save to database
     try {
@@ -136,7 +132,7 @@ function BudgetCategories({
       const updatedExpenses = currentBudget?.expenses?.map(exp => 
         reorderedExpenses.find(re => re.id === exp.id) || exp
       );
-      onExpensesChange(updatedExpenses || []);
+      handleExpensesChange(updatedExpenses || []);
 
       // Save to database
       await sequenceService.updateExpenseSequence(reorderedExpenses);
@@ -149,7 +145,7 @@ function BudgetCategories({
   const handleAddExpense = async (expense: BudgetExpenseCreateDTO) => {
     if (!expense || !currentBudget) return;
     const newExpense = await createExpense(expense);
-    await onExpensesChange([...(currentBudget?.expenses || []), newExpense]);
+    handleExpensesChange([...(currentBudget?.expenses || []), newExpense]);
   };
 
   const handleOpenCategoryMenu = (event: React.MouseEvent<HTMLElement>, category: BudgetCategory) => {
@@ -182,7 +178,7 @@ function BudgetCategories({
         e.id === updated.id ? updated : e
       ) || [];
 
-      await onExpensesChange(updatedExpenses);
+      handleExpensesChange(updatedExpenses);
     } catch (error) {
       console.error('Error updating expense:', error);
     }
@@ -203,7 +199,7 @@ function BudgetCategories({
       // Filter out the deleted expense
       await deleteExpense(deleteConfirmation.expense.id);
       const updatedExpenses = currentBudget.expenses?.filter(e => e.id !== deleteConfirmation.expense?.id) || [];
-      await onExpensesChange(updatedExpenses);
+      handleExpensesChange(updatedExpenses);
       
       // Close the dialog
       setDeleteConfirmation({

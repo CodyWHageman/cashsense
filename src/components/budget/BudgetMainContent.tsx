@@ -6,6 +6,7 @@ import { getMonthName } from '../../utils/dateUtils';
 import BudgetHeader from './BudgetHeader';
 import { Paper } from '@mui/material';
 import { useResponsive } from '../../hooks/useResponsive';
+import { useBudget } from '../../contexts/BudgetContext';
 
 const MainContent = styled('main')(({ theme }) => ({
     padding: theme.spacing(3),
@@ -24,33 +25,16 @@ const MainContent = styled('main')(({ theme }) => ({
 }));
 
 interface BudgetMainContentProps {
-    currentBudget: Budget | null;
-    onMonthChange: (month: number, year: number) => void;
-    selectedMonth: number;
-    selectedYear: number;
-    onGenerateBudgetClick: () => void;
     onIncomeClick: (income: BudgetIncome) => void;
     onExpenseClick: (expense: BudgetExpense) => void;
-    onIncomeUpdate: (income: BudgetIncome) => void;
-    onIncomeDelete: (incomeId: string) => void;
-    onExpensesChange: (expenses: BudgetExpense[]) => void;
-    onCategoriesChange: (categories: BudgetCategory[]) => void;
 }
 
 export function BudgetMainContent({
-    currentBudget,
-    onMonthChange,
-    selectedMonth,
-    selectedYear,
-    onGenerateBudgetClick,
     onExpenseClick,
-    onIncomeClick,
-    onIncomeUpdate,
-    onIncomeDelete,
-    onExpensesChange,
-    onCategoriesChange
+    onIncomeClick
 }: BudgetMainContentProps) {
     const { isMobile } = useResponsive();
+    const { currentBudget, selectedMonth, selectedYear, handleGenerateBudget } = useBudget();
     const monthYearDisplay = getMonthName(selectedMonth) + ' ' + selectedYear;
 
     return (
@@ -59,12 +43,7 @@ export function BudgetMainContent({
             flexDirection: 'column',
             width: '100%'
         }}>
-            <BudgetHeader 
-                currentBudget={currentBudget} 
-                onMonthChange={onMonthChange} 
-                selectedMonth={selectedMonth} 
-                selectedYear={selectedYear} 
-            />
+            <BudgetHeader />
             <MainContent>
                 {!currentBudget ? (
                     <Paper sx={{ p: isMobile ? 2 : 4, textAlign: 'center' }}>
@@ -77,7 +56,7 @@ export function BudgetMainContent({
                         <Button
                             variant="contained"
                             color="primary"
-                            onClick={onGenerateBudgetClick}
+                            onClick={handleGenerateBudget}
                             fullWidth={isMobile}
                         >
                             Generate Budget
@@ -86,21 +65,10 @@ export function BudgetMainContent({
                 ) : (
                     <>
                         <Box sx={{ mb: isMobile ? 2 : 4 }}>
-                            <BudgetIncomeComponent
-                                currentBudget={currentBudget}
-                                onIncomeClick={onIncomeClick}
-                                onIncomeUpdate={onIncomeUpdate}
-                                onIncomeDelete={onIncomeDelete}
-                            />
+                            <BudgetIncomeComponent onIncomeClick={onIncomeClick} />
                         </Box>
-
                         <Box>
-                            <BudgetCategories
-                                currentBudget={currentBudget}
-                                onExpenseClick={onExpenseClick}
-                                onExpensesChange={onExpensesChange}
-                                onCategoriesChange={onCategoriesChange}
-                            />
+                            <BudgetCategories onExpenseClick={onExpenseClick} />
                         </Box>
                     </>
                 )}

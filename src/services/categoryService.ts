@@ -81,7 +81,6 @@ export const updateExpenseCategory = async (
 
 // Delete a category
 export const deleteCategory = async (budgetCategory: BudgetCategory): Promise<void> => {
-  console.log('Deleting budget category', budgetCategory.id, 'for budget', budgetCategory.budgetId);
   // Check if expenses exist for this category and budget
   const { data: expenses, error: expensesError } = await supabase
     .from('budget_expenses')

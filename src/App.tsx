@@ -6,7 +6,8 @@ import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { useAuth } from './contexts/AuthContext';
 import { MainLayout } from './components/layout/MainLayout';
-
+import { BudgetProvider } from './contexts/BudgetContext';
+import { FundProvider } from './contexts/FundContext';
 // Lazy load components
 const Login = React.lazy(() => import('./components/auth/Login'));
 const Signup = React.lazy(() => import('./components/auth/Signup'));
@@ -56,7 +57,11 @@ function App() {
                   element={
                     <PrivateRoute>
                       <MainLayout>
-                        <BudgetPage />
+                        <BudgetProvider>
+                          <FundProvider>
+                            <BudgetPage />
+                          </FundProvider>
+                        </BudgetProvider>
                       </MainLayout>
                     </PrivateRoute>
                   } 
@@ -66,8 +71,10 @@ function App() {
                   path="/funds" 
                   element={
                     <PrivateRoute>
-                      <MainLayout>
-                        <FundPage />
+                      <MainLayout>  
+                        <FundProvider>
+                          <FundPage />
+                        </FundProvider>
                       </MainLayout>
                     </PrivateRoute>
                   } 

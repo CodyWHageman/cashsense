@@ -29,6 +29,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useResponsive } from '../../hooks/useResponsive';
 import { format } from 'date-fns';
 import { TransactionSplitDialog } from '../transactions/TransactionSplitDialog';
+import { useBudget } from '../../contexts/BudgetContext';
 
 const DesktopPanel = styled(Box)(({ theme }) => ({
   width: '400px',
@@ -46,24 +47,18 @@ const DesktopPanel = styled(Box)(({ theme }) => ({
 interface ExpenseDetailProps {
   expense: BudgetExpense;
   category?: ExpenseCategory;
-  currentBudget: Budget;
   onClose: () => void;
-  onDeleteTransaction: (transactionId: string) => void;
-  onExpenseUpdate: (updatedExpense: BudgetExpense) => void;
   open: boolean;
 }
 
 function ExpenseDetail({
   expense,
   category,
-  currentBudget,
   onClose,
-  onDeleteTransaction,
-  onExpenseUpdate,
   open
 }: ExpenseDetailProps) {
   const { isMobile } = useResponsive();
-  const theme = useTheme();
+  const { currentBudget, handleTransactionDeleted, handleExpenseUpdated } = useBudget();
   const [transactionDialogOpen, setTransactionDialogOpen] = useState(false);
   const { user } = useAuth();
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
@@ -73,8 +68,6 @@ function ExpenseDetail({
   (expense.splitTransactions || []).reduce((sum, t) => sum + t.splitAmount, 0);
   const remaining = expense.amount - totalSpent;
   const percentageSpent = expense.amount > 0 ? (totalSpent / expense.amount) * 100 : 0;
-
-  console.log(expense);
 
   const handleAddTransaction = async (transaction: Transaction) => {
     try {
@@ -93,7 +86,7 @@ function ExpenseDetail({
         );
       }
 
-      onDeleteTransaction(newTransaction.id || ''); // This will trigger a refresh
+      handleTransactionDeleted(newTransaction.id || ''); // This will trigger a refresh
       setTransactionDialogOpen(false);
     } catch (error) {
       console.error('Error adding transaction:', error);
@@ -103,7 +96,7 @@ function ExpenseDetail({
   const handleDeleteTransaction = async (transactionId: string) => {
     try {
       await deleteTransaction(transactionId);
-      onDeleteTransaction(transactionId);
+      handleTransactionDeleted(transactionId);
     } catch (error) {
       console.error('Error deleting transaction:', error);
     }
@@ -112,7 +105,7 @@ function ExpenseDetail({
   const handleFundChange = async (fundId: string | null) => {
     try {
       const updatedExpense = await updateExpense(expense.id, { ...expense, fundId });
-      onExpenseUpdate(updatedExpense);
+      handleExpenseUpdated(updatedExpense);
     } catch (error) {
       console.error('Error updating expense fund:', error);
     }
@@ -121,7 +114,7 @@ function ExpenseDetail({
   const handleSplitTransaction = async (splitDTO: TransactionSplitDTO) => {
     try {
       await splitTransaction(splitDTO);
-      onDeleteTransaction(splitDTO.parentTransactionId); // This will trigger a refresh
+      handleTransactionDeleted(splitDTO.parentTransactionId); // This will trigger a refresh
       setSelectedTransaction(null);
     } catch (error) {
       console.error('Error splitting transaction:', error);
@@ -287,27 +280,20 @@ function ExpenseDetail({
         </Button>
       </Box>
 
-      <TransactionDialog
-        open={transactionDialogOpen}
-        onClose={() => setTransactionDialogOpen(false)}
-        transaction={{
-          date: new Date(),
-          description: '',
-          amount: 0,
-          type: 'expense',
-          categoryName: category?.name || '',
-          sourceName: 'Expense',
-          categoryColor: category?.color
-        }}
-      />
+      {selectedTransaction && (
+        <TransactionDialog
+          open={transactionDialogOpen}
+          onClose={() => setTransactionDialogOpen(false)}
+          transaction={selectedTransaction}
+        />
+      )}
 
       {selectedTransaction && (
         <TransactionSplitDialog
           open={Boolean(selectedTransaction)}
           onClose={() => setSelectedTransaction(null)}
           transaction={selectedTransaction}
-          expenses={currentBudget?.expenses || []}
-          onSplit={handleSplitTransaction}
+          onSubmit={handleSplitTransaction}
         />
       )}
     </Box>

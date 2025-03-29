@@ -20,14 +20,15 @@ import { format } from 'date-fns';
 import { Warning, CheckCircle, Delete } from '@mui/icons-material';
 import { deleteFundTransaction } from '../../services/fundService';
 import { FundTransaction } from '../../models/Transaction';
+import { useFund } from '../../contexts/FundContext';
+import { FundWithBalance } from '../../utils/fundUtils';
 
 interface FundDetailProps {
-  fund: Fund;
-  balance: number;
-  onTransactionDeleted?: () => void;
+  fund: FundWithBalance;
 }
 
-const FundDetail: React.FC<FundDetailProps> = ({ fund, balance, onTransactionDeleted }) => {
+const FundDetail: React.FC<FundDetailProps> = ({ fund }) => {
+  const { deleteFundTransactionAndRefresh } = useFund();
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     open: boolean;
     transaction: FundTransaction | null;
@@ -48,11 +49,7 @@ const FundDetail: React.FC<FundDetailProps> = ({ fund, balance, onTransactionDel
     if (!deleteConfirmation.transaction) return;
     
     try {
-      await deleteFundTransaction(deleteConfirmation.transaction);
-      // Notify parent component that a transaction was deleted
-      if (onTransactionDeleted) {
-        onTransactionDeleted();
-      }
+      await deleteFundTransactionAndRefresh(deleteConfirmation.transaction);
     } catch (error) {
       console.error('Error deleting fund transaction:', error);
     } finally {
@@ -70,8 +67,8 @@ const FundDetail: React.FC<FundDetailProps> = ({ fund, balance, onTransactionDel
         <Typography variant="subtitle2" color="text.secondary">
           Current Balance
         </Typography>
-        <Typography variant="h4" color={balance >= 0 ? 'success.main' : 'error.main'}>
-          ${balance.toFixed(2)}
+        <Typography variant="h4" color={fund.balance >= 0 ? 'success.main' : 'error.main'}>
+          ${fund.balance.toFixed(2)}
         </Typography>
       </Box>
 
