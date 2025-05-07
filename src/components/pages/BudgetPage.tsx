@@ -1,29 +1,21 @@
-import { useEffect, useState, useRef } from 'react';
+import { useState } from 'react';
 import { Box } from '@mui/material';
 import { BudgetMainContent } from '../budget/BudgetMainContent';
 import { BudgetDetailPanel } from '../budget/BudgetDetailPanel';
-import { Budget, BudgetIncome, BudgetExpense, BudgetCategory, ExpenseCategory, Fund } from '../../models/Budget';
+import { BudgetIncome, BudgetExpense, ExpenseCategory } from '../../models/Budget';
 import { useResponsive } from '../../hooks/useResponsive';
-import { createBudget, getBudgetByMonthAndYear } from '../../services/budgetService';
-import { useAuth } from '../../contexts/AuthContext';
-import { getJavaScriptMonth } from '../../utils/dateUtils';
-import { getDatabaseMonth } from '../../utils/dateUtils';
-import { enqueueSnackbar } from 'notistack';
 import Loading from '../common/Loading';
-import { deleteTransaction } from '../../services/transactionService';
-import AddCategoryButton from '../global-actions/AddCategoryButton';
-import ImportTransactionButton from '../global-actions/ImportTransactionButton';
-import { getUserFunds } from '../../services/fundService';
-import { Transaction } from '../../models/Transaction';
 import { BudgetActions } from '../budget/BudgetActions';
 import { useBudget } from '../../contexts/BudgetContext';
+import { useFund } from '../../contexts/FundContext';
+
 function BudgetPage() {
     const { currentBudget, loading } = useBudget();
     const [selectedIncome, setSelectedIncome] = useState<BudgetIncome | null>(null);
     const [selectedExpense, setSelectedExpense] = useState<BudgetExpense | null>(null);
     const [selectedCategory, setSelectedCategory] = useState<ExpenseCategory | undefined>();
     const { isMobile } = useResponsive();
-    const [funds, setFunds] = useState<Fund[]>([]);
+    const { funds } = useFund();
 
     const handleIncomeClick = (income: BudgetIncome | null) => {
         setSelectedIncome(income);
