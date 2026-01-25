@@ -11,12 +11,21 @@ import {
   writeBatch,
   Timestamp,
   orderBy,
-  documentId // Added import
+  documentId
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { Fund } from '../models/Budget';
 import { Transaction, FundTransaction, FundTransactionCreateDTO } from '../models/Transaction';
 import { mapTransaction } from './transactionService';
+
+// Helper: Remove undefined keys
+const sanitizeData = (data: any) => {
+  return Object.entries(data).reduce((acc, [key, value]) => {
+    if (value === undefined) return acc;
+    acc[key] = value;
+    return acc;
+  }, {} as any);
+};
 
 const mapFundTransaction = (doc: any, transaction?: Transaction): FundTransaction => {
   const data = doc.data();
@@ -48,8 +57,9 @@ const mapFund = (doc: any, transactions: FundTransaction[] = []): Fund => {
 };
 
 export const createFund = async (fund: Omit<Fund, 'id'>): Promise<Fund> => {
+  const cleanFund = sanitizeData(fund);
   const docRef = await addDoc(collection(db, 'funds'), {
-    ...fund,
+    ...cleanFund,
     createdAt: new Date(),
     updatedAt: new Date()
   });
@@ -69,23 +79,19 @@ export const getFundById = async (id: string): Promise<Fund | null> => {
   const snap = await getDoc(doc(db, 'funds', id));
   if (!snap.exists()) return null;
 
-  // Fetch transactions for this fund
   const transQ = query(collection(db, 'fund_transactions'), where('fundId', '==', id));
   const transSnap = await getDocs(transQ);
 
-  // Fetch the actual Transaction details (amounts) for calculation
   const transactionIds = transSnap.docs.map(d => d.data().transactionId).filter(Boolean);
   
   let transactionMap: Record<string, Transaction> = {};
   if (transactionIds.length > 0) {
-    // Basic chunking for Firestore 'in' query limit (max 30)
     const chunks = [];
     for (let i = 0; i < transactionIds.length; i += 30) {
         chunks.push(transactionIds.slice(i, i + 30));
     }
     
     for (const chunk of chunks) {
-        // FIXED: documentId() function call
         const tQ = query(collection(db, 'transactions'), where(documentId(), 'in', chunk)); 
         const tSnap = await getDocs(tQ);
         tSnap.forEach(d => {
@@ -103,8 +109,9 @@ export const getFundById = async (id: string): Promise<Fund | null> => {
 };
 
 export const updateFund = async (id: string, updates: Partial<Fund>): Promise<Fund> => {
+  const cleanUpdates = sanitizeData(updates);
   await updateDoc(doc(db, 'funds', id), {
-    ...updates,
+    ...cleanUpdates,
     updatedAt: new Date()
   });
   return { id, ...updates } as any;
@@ -133,8 +140,9 @@ export const createFundTransaction = async (
 export const createFundTransactions = async (fundTransactions: FundTransactionCreateDTO[]): Promise<void> => {
   const batch = writeBatch(db);
   fundTransactions.forEach(ft => {
+    const cleanFt = sanitizeData(ft);
     const ref = doc(collection(db, 'fund_transactions'));
-    batch.set(ref, { ...ft, createdAt: new Date(), updatedAt: new Date() });
+    batch.set(ref, { ...cleanFt, createdAt: new Date(), updatedAt: new Date() });
   });
   await batch.commit();
 };
@@ -147,7 +155,6 @@ export const updateFundTransactionStatus = async (id: string, transferComplete: 
 };
 
 export const getFundBalance = async (fundId: string): Promise<number> => {
-  // 1. Get Fund Transactions Link Records
   const q = query(collection(db, 'fund_transactions'), where('fundId', '==', fundId));
   const snap = await getDocs(q);
   
@@ -158,7 +165,6 @@ export const getFundBalance = async (fundId: string): Promise<number> => {
   
   if (transactionIds.length === 0) return 0;
 
-  // 2. Fetch Actual Transactions to get Amounts
   const chunks = [];
   for (let i = 0; i < transactionIds.length; i += 30) {
       chunks.push(transactionIds.slice(i, i + 30));
@@ -175,7 +181,6 @@ export const getFundBalance = async (fundId: string): Promise<number> => {
     });
   }
 
-  // 3. Calculate Balance
   fundTransactions.forEach(ft => {
       const amount = amountsMap[ft.transactionId] || 0;
       if (ft.type === 'deposit') {
@@ -214,25 +219,21 @@ export const updateFundTransaction = async (
   fundTransactionId: string,
   updates: { transferTransactionId?: string; transferComplete?: boolean; }
 ): Promise<void> => {
+  const cleanUpdates = sanitizeData(updates);
   await updateDoc(doc(db, 'fund_transactions', fundTransactionId), {
-    ...updates,
+    ...cleanUpdates,
     updatedAt: new Date()
   });
 };
 
 export const deleteFundTransaction = async (fundTransaction: FundTransaction): Promise<void> => {
   const batch = writeBatch(db);
-  
-  // Delete the fund transaction link
   batch.delete(doc(db, 'fund_transactions', fundTransaction.id));
-
-  // Delete associated real transactions
   if (fundTransaction.transactionId) {
     batch.delete(doc(db, 'transactions', fundTransaction.transactionId));
   }
   if (fundTransaction.transferTransactionId) {
     batch.delete(doc(db, 'transactions', fundTransaction.transferTransactionId));
   }
-
   await batch.commit();
 };

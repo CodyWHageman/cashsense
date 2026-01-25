@@ -13,6 +13,16 @@ import {
 import { db } from './firebase';
 import { BudgetCategory, ExpenseCategory, ExpenseCategoryCreateDTO, ExpenseCategoryUpdateDTO } from '../models/Budget';
 
+// Helper: Remove undefined keys
+const sanitizeData = (data: any) => {
+  return Object.entries(data).reduce((acc, [key, value]) => {
+    if (value === undefined) return acc;
+    acc[key] = value;
+    return acc;
+  }, {} as any);
+};
+
+// ... [Existing mappers] ...
 const mapExpenseCategory = (doc: any): ExpenseCategory => {
   const data = doc.data();
   return {
@@ -42,19 +52,16 @@ export const createCategory = async (
   sequenceNumber: number
 ): Promise<BudgetCategory> => {
   const batch = writeBatch(db);
+  const cleanCategory = sanitizeData(newCategory);
 
-  // 1. Create Expense Category (The definition)
   const categoryRef = doc(collection(db, 'expense_categories'));
   const categoryData = {
-    name: newCategory.name,
-    color: newCategory.color,
-    userId: newCategory.userId,
+    ...cleanCategory,
     createdAt: new Date(),
     updatedAt: new Date()
   };
   batch.set(categoryRef, categoryData);
 
-  // 2. Create Budget Category (The link)
   const budgetCategoryRef = doc(collection(db, 'budget_categories'));
   const budgetCategoryData = {
     budgetId: budgetId,
@@ -78,16 +85,16 @@ export const updateExpenseCategory = async (
   { name, color }: ExpenseCategoryUpdateDTO
 ): Promise<ExpenseCategory> => {
   const ref = doc(db, 'expense_categories', id);
+  const cleanUpdates = sanitizeData({ name, color });
+  
   await updateDoc(ref, {
-    name,
-    color,
+    ...cleanUpdates,
     updatedAt: new Date()
   });
   return { id, name, color, updatedAt: new Date() } as any;
 };
 
 export const deleteCategory = async (budgetCategory: BudgetCategory): Promise<void> => {
-  // 1. Check for associated expenses in this budget
   const expQ = query(
     collection(db, 'budget_expenses'), 
     where('categoryId', '==', budgetCategory.category.id),
@@ -100,22 +107,15 @@ export const deleteCategory = async (budgetCategory: BudgetCategory): Promise<vo
   }
 
   const batch = writeBatch(db);
-
-  // 2. Delete the link (budget_category)
-  // We need to find the specific budget_category link ID. 
-  // Optimization: If we passed the ID in the object, use it.
   const linkRef = doc(db, 'budget_categories', budgetCategory.id);
   batch.delete(linkRef);
 
-  // 3. Check if this category definition is used in OTHER budgets
-  // If not, delete the definition too (Cleanup)
   const otherUsageQ = query(
     collection(db, 'budget_categories'), 
     where('categoryId', '==', budgetCategory.category.id)
   );
   const otherUsageSnap = await getDocs(otherUsageQ);
 
-  // If the ONLY usage is the one we are about to delete (size 1), then delete the definition
   if (otherUsageSnap.size <= 1) {
     const defRef = doc(db, 'expense_categories', budgetCategory.category.id);
     batch.delete(defRef);

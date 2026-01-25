@@ -13,6 +13,15 @@ import {
 import { db } from './firebase';
 import { BudgetIncome, BudgetIncomeCreateDTO } from '../models/Budget';
 
+// Helper: Remove undefined keys
+const sanitizeData = (data: any) => {
+  return Object.entries(data).reduce((acc, [key, value]) => {
+    if (value === undefined) return acc;
+    acc[key] = value;
+    return acc;
+  }, {} as any);
+};
+
 const mapIncome = (doc: any): BudgetIncome => {
   const data = doc.data();
   return {
@@ -29,8 +38,9 @@ const mapIncome = (doc: any): BudgetIncome => {
 };
 
 export const createIncome = async (income: BudgetIncomeCreateDTO): Promise<BudgetIncome> => {
+  const cleanIncome = sanitizeData(income);
   const docRef = await addDoc(collection(db, 'budget_incomes'), {
-    ...income,
+    ...cleanIncome,
     createdAt: new Date(),
     updatedAt: new Date()
   });
@@ -42,9 +52,10 @@ export const createIncomes = async (incomes: BudgetIncomeCreateDTO[]): Promise<B
   const results: BudgetIncome[] = [];
 
   incomes.forEach(inc => {
+    const cleanInc = sanitizeData(inc);
     const ref = doc(collection(db, 'budget_incomes'));
     batch.set(ref, {
-      ...inc,
+      ...cleanInc,
       createdAt: new Date(),
       updatedAt: new Date()
     });
@@ -63,8 +74,10 @@ export const getBudgetIncomes = async (budgetId: string): Promise<BudgetIncome[]
 
 export const updateIncome = async (id: string, updates: Partial<BudgetIncome>): Promise<BudgetIncome> => {
   const ref = doc(db, 'budget_incomes', id);
+  const cleanUpdates = sanitizeData(updates);
+  
   await updateDoc(ref, {
-    ...updates,
+    ...cleanUpdates,
     updatedAt: new Date()
   });
   return { id, ...updates } as any;
@@ -82,7 +95,7 @@ export const updateIncomes = async (incomes: BudgetIncome[]): Promise<BudgetInco
       name: inc.name,
       amount: inc.amount,
       frequency: inc.frequency,
-      expectedDate: inc.expectedDate,
+      expectedDate: inc.expectedDate ?? null, // Ensure null if undefined
       updatedAt: new Date()
     });
   });

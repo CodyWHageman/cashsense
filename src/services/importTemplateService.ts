@@ -12,6 +12,15 @@ import {
 import { db } from './firebase';
 import { ImportTemplate, CreateImportTemplateDTO, UpdateImportTemplateDTO } from '../models/ImportTemplate';
 
+// Helper: Remove undefined keys
+const sanitizeData = (data: any) => {
+  return Object.entries(data).reduce((acc, [key, value]) => {
+    if (value === undefined) return acc;
+    acc[key] = value;
+    return acc;
+  }, {} as any);
+};
+
 const mapTemplate = (doc: any): ImportTemplate => {
   const data = doc.data();
   return {
@@ -34,8 +43,9 @@ export async function getImportTemplates(userId: string): Promise<ImportTemplate
 }
 
 export async function createImportTemplate(template: CreateImportTemplateDTO): Promise<ImportTemplate> {
+  const cleanTemplate = sanitizeData(template);
   const ref = await addDoc(collection(db, 'import_templates'), {
-    ...template,
+    ...cleanTemplate,
     createdAt: new Date(),
     updatedAt: new Date()
   });
@@ -43,8 +53,9 @@ export async function createImportTemplate(template: CreateImportTemplateDTO): P
 }
 
 export async function updateImportTemplate(id: string, template: UpdateImportTemplateDTO): Promise<ImportTemplate> {
+  const cleanTemplate = sanitizeData(template);
   await updateDoc(doc(db, 'import_templates', id), {
-    ...template,
+    ...cleanTemplate,
     updatedAt: new Date()
   });
   return { id, ...template } as any;

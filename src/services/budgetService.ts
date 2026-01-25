@@ -14,7 +14,7 @@ import {
   Timestamp, 
   documentId
 } from 'firebase/firestore';
-import { db } from './firebase'; // Ensure this file exists as created in step 3
+import { db } from './firebase'; 
 import { 
   Budget, 
   BudgetExpense, 
@@ -25,15 +25,23 @@ import {
 } from '../models/Budget';
 import { getDatabaseMonth } from '../utils/dateUtils';
 import { ParentTransaction, SplitTransaction, Transaction } from '../models/Transaction';
-import { mapTransaction } from './transactionService'; // You will need to update this service next
+import { mapTransaction } from './transactionService';
 
-// --- Mapper Helpers ---
+// Helper: Remove undefined keys
+const sanitizeData = (data: any) => {
+  return Object.entries(data).reduce((acc, [key, value]) => {
+    if (value === undefined) return acc;
+    acc[key] = value;
+    return acc;
+  }, {} as any);
+};
 
+// ... [Existing Mappers remain unchanged] ...
 const toDate = (val: any): Date | null => {
   if (!val) return null;
   if (val instanceof Timestamp) return val.toDate();
   if (val instanceof Date) return val;
-  return new Date(val); // Fallback for strings
+  return new Date(val);
 };
 
 const mapExpenseCategory = (doc: any): ExpenseCategory => {
@@ -52,7 +60,6 @@ const mapBudgetCategory = (doc: any, category?: ExpenseCategory): BudgetCategory
   return {
     id: doc.id,
     budgetId: data.budgetId,
-    // We assume the category details are joined in the service layer
     category: category || { id: data.categoryId, name: 'Unknown', color: '#ccc', userId: '', createdAt: new Date() },
     createdAt: toDate(data.createdAt) || new Date(),
     updatedAt: toDate(data.updatedAt) || new Date(),
@@ -73,8 +80,8 @@ const mapExpense = (doc: any, transactions: Transaction[] = []): BudgetExpense =
     createdAt: toDate(data.createdAt) || new Date(),
     updatedAt: toDate(data.updatedAt) || new Date(),
     sequenceNumber: data.sequenceNumber,
-    transactions: transactions, // Joined in service
-    splitTransactions: [] // TODO: Implement split transactions fetching if needed
+    transactions: transactions,
+    splitTransactions: []
   };
 };
 
@@ -117,7 +124,6 @@ const mapBudget = (
 
 export const getBudgetByMonthAndYear = async (month: number, year: number, userId: string): Promise<Budget | null> => {
   try {
-    // 1. Fetch Budget Document
     const budgetsRef = collection(db, 'budgets');
     const q = query(
       budgetsRef, 
@@ -133,21 +139,16 @@ export const getBudgetByMonthAndYear = async (month: number, year: number, userI
     const budgetDoc = budgetSnap.docs[0];
     const budgetId = budgetDoc.id;
 
-    // 2. Parallel Fetch: Expenses, Incomes, Categories
     const [expensesSnap, incomesSnap, budgetCatsSnap] = await Promise.all([
       getDocs(query(collection(db, 'budget_expenses'), where('budgetId', '==', budgetId))),
       getDocs(query(collection(db, 'budget_incomes'), where('budgetId', '==', budgetId))),
       getDocs(query(collection(db, 'budget_categories'), where('budgetId', '==', budgetId)))
     ]);
 
-    // 3. Process Categories (Need to fetch linked Expense Categories)
-    // Collect all category IDs to fetch
     const categoryIds = budgetCatsSnap.docs.map(d => d.data().categoryId);
     let expenseCategoriesMap: Record<string, ExpenseCategory> = {};
 
     if (categoryIds.length > 0) {
-      // Firestore 'in' query is limited to 30 items. If you have more, you need to chunk this.
-      // For now assuming < 30 categories per budget.
       const chunks = [];
       const chunkSize = 30;
       for (let i = 0; i < categoryIds.length; i += chunkSize) {
@@ -168,17 +169,13 @@ export const getBudgetByMonthAndYear = async (month: number, year: number, userI
     const categories = budgetCatsSnap.docs.map(doc => 
       mapBudgetCategory(doc, expenseCategoriesMap[doc.data().categoryId])
     );
-    // Sort categories by sequence
     categories.sort((a, b) => a.sequenceNumber - b.sequenceNumber);
 
-    // 4. Fetch Transactions for Expenses & Incomes
-    // Optimization: Collect all Expense IDs and Income IDs
     const expenseIds = expensesSnap.docs.map(d => d.id);
     const incomeIds = incomesSnap.docs.map(d => d.id);
     
     let transactionMap: Record<string, Transaction[]> = {};
 
-    // Helper to fetch transactions by field
     const fetchTransactionsForLinks = async (field: 'expenseId' | 'incomeId', ids: string[]) => {
       if (ids.length === 0) return;
       const chunks = [];
@@ -192,7 +189,7 @@ export const getBudgetByMonthAndYear = async (month: number, year: number, userI
 
       results.forEach(snap => {
         snap.forEach(doc => {
-          const t = mapTransaction(doc); // Assumes mapTransaction handles Firestore doc
+          const t = mapTransaction(doc); 
           const linkId = field === 'expenseId' ? t.expenseId : t.incomeId;
           if (linkId) {
             if (!transactionMap[linkId]) transactionMap[linkId] = [];
@@ -207,7 +204,6 @@ export const getBudgetByMonthAndYear = async (month: number, year: number, userI
       fetchTransactionsForLinks('incomeId', incomeIds)
     ]);
 
-    // 5. Map final objects
     const expenses = expensesSnap.docs.map(doc => mapExpense(doc, transactionMap[doc.id] || []));
     const incomes = incomesSnap.docs.map(doc => mapIncome(doc, transactionMap[doc.id] || []));
 
@@ -222,16 +218,12 @@ export const getBudgetByMonthAndYear = async (month: number, year: number, userI
 };
 
 export const getMostRecentBudgetForCopy = async (month: number, year: number, userId: string): Promise<Budget | null> => {
-  // Logic: Fetch all budgets for user, sort descending, filter in JS (Firestore limitation on OR queries across fields)
-  // OR: Query budgets < year, OR (year == year AND month < month).
-  // Firestore composite queries are tricky. Easier to fetch recent budgets ordered by year/month desc and find first one older than current.
-  
   const q = query(
     collection(db, 'budgets'),
     where('userId', '==', userId),
     orderBy('year', 'desc'),
     orderBy('month', 'desc'),
-    limit(10) // reasonable buffer
+    limit(10)
   );
 
   const snapshot = await getDocs(q);
@@ -246,36 +238,30 @@ export const getMostRecentBudgetForCopy = async (month: number, year: number, us
 
   if (!previousBudgetDoc) return null;
 
-  // If found, we need to fetch its full details to copy them
-  // Re-use the main get function
   const data = previousBudgetDoc.data();
   return getBudgetByMonthAndYear(data.month, data.year, userId);
 };
 
 export const createBudget = async (budgetDTO: BudgetCreateDTO): Promise<Budget> => {
   const batch = writeBatch(db);
+  const cleanBudget = sanitizeData(budgetDTO);
   
-  // 1. Create the Budget Doc
   const newBudgetRef = doc(collection(db, 'budgets'));
   batch.set(newBudgetRef, {
-    month: budgetDTO.month,
-    year: budgetDTO.year,
-    userId: budgetDTO.userId,
+    ...cleanBudget,
     createdAt: new Date(),
     updatedAt: new Date()
   });
 
-  // 2. Check for Previous Budget to Copy
   const recentBudget = await getMostRecentBudgetForCopy(budgetDTO.month, budgetDTO.year, budgetDTO.userId);
 
   if (recentBudget) {
-    // Copy Categories
     if (recentBudget.categories) {
       recentBudget.categories.forEach(cat => {
         const newRef = doc(collection(db, 'budget_categories'));
         batch.set(newRef, {
           budgetId: newBudgetRef.id,
-          categoryId: cat.category.id, // Link to existing expense_category
+          categoryId: cat.category.id,
           sequenceNumber: cat.sequenceNumber,
           createdAt: new Date(),
           updatedAt: new Date()
@@ -283,7 +269,6 @@ export const createBudget = async (budgetDTO: BudgetCreateDTO): Promise<Budget> 
       });
     }
 
-    // Copy Expenses
     if (recentBudget.expenses) {
       recentBudget.expenses.forEach(exp => {
         const newRef = doc(collection(db, 'budget_expenses'));
@@ -292,7 +277,7 @@ export const createBudget = async (budgetDTO: BudgetCreateDTO): Promise<Budget> 
           categoryId: exp.categoryId,
           name: exp.name,
           amount: exp.amount,
-          dueDate: exp.dueDate, // Date object is fine for Firestore
+          dueDate: exp.dueDate, 
           fundId: exp.fundId || null,
           sequenceNumber: exp.sequenceNumber,
           createdAt: new Date(),
@@ -301,7 +286,6 @@ export const createBudget = async (budgetDTO: BudgetCreateDTO): Promise<Budget> 
       });
     }
 
-    // Copy Incomes
     if (recentBudget.incomes) {
       recentBudget.incomes.forEach(inc => {
         const newRef = doc(collection(db, 'budget_incomes'));
@@ -320,7 +304,6 @@ export const createBudget = async (budgetDTO: BudgetCreateDTO): Promise<Budget> 
 
   await batch.commit();
 
-  // Return the newly created budget
   const created = await getBudgetByMonthAndYear(budgetDTO.month, budgetDTO.year, budgetDTO.userId);
   if (!created) throw new Error("Failed to retrieve created budget");
   return created;
@@ -328,37 +311,27 @@ export const createBudget = async (budgetDTO: BudgetCreateDTO): Promise<Budget> 
 
 export const updateBudget = async (id: string, updates: Partial<Budget>): Promise<Budget> => {
   const ref = doc(db, 'budgets', id);
+  const cleanUpdates = sanitizeData(updates);
   await updateDoc(ref, {
-    ...updates,
+    ...cleanUpdates,
     updatedAt: new Date()
   });
-  
-  // Return updated
   const snap = await getDoc(ref);
-  // We'd ideally re-fetch the whole tree, but for month/year updates we might just map the doc
-  // However, returning a partial object might break UI expectation. 
-  // Let's rely on the caller refreshing or return simple mapped doc
   return mapBudget(snap); 
 };
 
 export const deleteBudget = async (id: string): Promise<void> => {
-  // Firestore doesn't cascade delete automatically. We must delete sub-resources.
   const batch = writeBatch(db);
-  
-  // 1. Delete Budget
   batch.delete(doc(db, 'budgets', id));
 
-  // 2. Find and Delete Budget Expenses
   const expQ = query(collection(db, 'budget_expenses'), where('budgetId', '==', id));
   const expSnap = await getDocs(expQ);
   expSnap.forEach(d => batch.delete(d.ref));
 
-  // 3. Find and Delete Budget Incomes
   const incQ = query(collection(db, 'budget_incomes'), where('budgetId', '==', id));
   const incSnap = await getDocs(incQ);
   incSnap.forEach(d => batch.delete(d.ref));
 
-  // 4. Find and Delete Budget Categories
   const catQ = query(collection(db, 'budget_categories'), where('budgetId', '==', id));
   const catSnap = await getDocs(catQ);
   catSnap.forEach(d => batch.delete(d.ref));
@@ -387,8 +360,6 @@ export const checkBudgetsExist = async (
   periods: BudgetPeriod[],
   userId: string
 ): Promise<BudgetCheckResult[]> => {
-  // Optimization: Fetch all user budgets (only fields needed) and check in memory
-  // This is better than N queries
   const q = query(collection(db, 'budgets'), where('userId', '==', userId));
   const snapshot = await getDocs(q);
   
