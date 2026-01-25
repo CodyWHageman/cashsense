@@ -445,7 +445,7 @@ export default function TransactionImportModal({
             fundId: expense.fundId!,
             transactionId: transaction.id,
             type: 'deposit' as const,
-            transferComplete: false
+            transferComplete: true
           }));
           await createFundTransactions(fundTransactions);
         }

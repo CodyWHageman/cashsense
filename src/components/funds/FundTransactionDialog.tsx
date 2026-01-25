@@ -13,9 +13,9 @@ import {
   ToggleButtonGroup
 } from '@mui/material';
 import { Close } from '@mui/icons-material';
-import { Transaction } from '../../models/Transaction';
 import { createTransaction } from '../../services/transactionService';
-import { createFundTransaction } from '../../services/fundService';
+import { useFund } from '../../contexts/FundContext';
+import { generateHashId } from '../../utils/transactionUtils';
 
 interface FundTransactionDialogProps {
   open: boolean;
@@ -30,6 +30,7 @@ function FundTransactionDialog({
   fundId,
   fundName 
 }: FundTransactionDialogProps) {
+  const { addFundTransaction } = useFund();
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     description: '',
@@ -61,20 +62,24 @@ function FundTransactionDialog({
     if (!validate()) return;
 
     try {
-      // Create the transaction
+      // 1. Create the base transaction
       const transaction = await createTransaction({
         date: new Date(formData.date),
         description: formData.description,
         amount: parseFloat(formData.amount),
-        createdAt: new Date()
+        hashId: generateHashId(parseFloat(formData.amount), new Date(formData.date), formData.description)
       });
 
-      // Create the fund transaction
-      await createFundTransaction(
+      // 2. Link to fund
+      // LOGIC CHANGE: Deposits are always complete (money moved in).
+      // Withdrawals are pending (money spent, needs transfer out).
+      const isDeposit = formData.type === 'deposit';
+      
+      await addFundTransaction(
         fundId,
         transaction.id!,
         formData.type,
-        false
+        isDeposit // true if deposit, false if withdrawal
       );
 
       onClose();
@@ -173,4 +178,4 @@ function FundTransactionDialog({
   );
 }
 
-export default FundTransactionDialog; 
+export default FundTransactionDialog;

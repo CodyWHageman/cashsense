@@ -66,13 +66,20 @@ export const createFund = async (fund: Omit<Fund, 'id'>): Promise<Fund> => {
   return mapFund({ id: docRef.id, data: () => fund });
 };
 
+// UPDATED: Fetches deep data for all funds so balances calculate correctly
 export const getUserFunds = async (userId: string): Promise<Fund[]> => {
   const q = query(collection(db, 'funds'), where('userId', '==', userId), orderBy('createdAt', 'desc'));
   const snap = await getDocs(q);
   
   if (snap.empty) return [];
 
-  return snap.docs.map(d => mapFund(d));
+  // Reuse getFundById to fetch transactions for each fund
+  // This ensures 'fundTransactions' is populated, which calculateFundBalance needs.
+  const funds = await Promise.all(snap.docs.map(async (doc) => {
+     return await getFundById(doc.id) as Fund;
+  }));
+
+  return funds.filter(Boolean);
 };
 
 export const getFundById = async (id: string): Promise<Fund | null> => {
