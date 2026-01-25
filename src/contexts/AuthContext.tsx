@@ -1,5 +1,18 @@
+// src/contexts/AuthContext.tsx
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '../services/supabase';
+import { 
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword, 
+  signOut as firebaseSignOut, 
+  onAuthStateChanged, 
+  User,
+  sendPasswordResetEmail,
+  updateProfile,
+  updatePassword as firebaseUpdatePassword
+} from 'firebase/auth';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { auth, db } from '../services/firebase';
+import { getGravatarUrl } from '../utils/gravatarUtils'; // Import the new utility
 
 interface UserProfile {
   id: string;
@@ -9,7 +22,8 @@ interface UserProfile {
 }
 
 interface AuthContextType {
-  user: any;
+  user: User | null;
+  userProfile: UserProfile | null;
   loading: boolean;
   signUp: (email: string, password: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
@@ -24,108 +38,114 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        setUser(session?.user ?? null);
-  
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
-          setUser(session?.user ?? null);
-        });
-  
-        return () => {
-          subscription.unsubscribe();
-        };
-      } finally {
-        setLoading(false);
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (currentUser && !currentUser.photoURL && currentUser.email) {
+        const gravatarUrl = getGravatarUrl(currentUser.email);
+        try {
+            await updateProfile(currentUser, { photoURL: gravatarUrl });
+            // Force a refresh of the user object to reflect the change immediately
+            // Note: In some Firebase versions, we might need to reload, but usually object update works for local state
+        } catch (e) {
+            console.error("Failed to set Gravatar", e);
+        }
       }
-    };
 
-    fetchSession();
+      setUser(currentUser);
+      
+      if (currentUser) {
+        try {
+          // MIGRATION FIX: Use currentUser.uid
+          const userDocRef = doc(db, 'users', currentUser.uid);
+          const userDoc = await getDoc(userDocRef);
+          
+          if (userDoc.exists()) {
+            setUserProfile(userDoc.data() as UserProfile);
+          } else {
+            const newProfile: UserProfile = {
+              id: currentUser.uid,
+              email: currentUser.email,
+              display_name: currentUser.displayName,
+              theme_preference: 'light'
+            };
+            await setDoc(userDocRef, newProfile);
+            setUserProfile(newProfile);
+          }
+        } catch (error) {
+          console.error("Error fetching user profile:", error);
+        }
+      } else {
+        setUserProfile(null);
+      }
+      
+      setLoading(false);
+    });
+
+    return unsubscribe;
   }, []);
 
   const signUp = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) throw error;
-    setUser(data.user);
+    const { user: newUser } = await createUserWithEmailAndPassword(auth, email, password);
+    
+    // Assign Gravatar immediately on signup
+    if (newUser.email) {
+        const gravatarUrl = getGravatarUrl(newUser.email);
+        await updateProfile(newUser, { photoURL: gravatarUrl });
+    }
+
+    const newProfile: UserProfile = {
+        id: newUser.uid,
+        email: newUser.email,
+        display_name: '',
+        theme_preference: 'light'
+    };
+    await setDoc(doc(db, 'users', newUser.uid), newProfile);
+    setUserProfile(newProfile);
   };
 
   const signIn = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ 
-      email, 
-      password
-    });
-    
-    if (error) throw error;
-    setUser(data.user);
+    await signInWithEmailAndPassword(auth, email, password);
   };
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-    setUser(null);
+    await firebaseSignOut(auth);
   };
 
   const resetPassword = async (email: string) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
-    
-    if (error) throw error;
+    await sendPasswordResetEmail(auth, email);
   };
 
   const updatePassword = async (newPassword: string) => {
-    const { error } = await supabase.auth.updateUser({
-      password: newPassword
-    });
-    
-    if (error) throw error;
+    if (!user) throw new Error('No user logged in');
+    await firebaseUpdatePassword(user, newPassword);
   };
 
   const updateUserProfile = async (updates: Partial<UserProfile>): Promise<void> => {
     if (!user) throw new Error('No user logged in');
-    
-    const { data, error } = await supabase.auth.updateUser({
-      data: {
-        display_name: updates.display_name,
-        ...(updates.theme_preference && { theme_preference: updates.theme_preference })
-      }
-    });
-    
-    if (error) throw error;
-    
-    // Update the local user state with the new metadata
-    setUser(data.user);
+    if (updates.display_name) {
+      await updateProfile(user, { displayName: updates.display_name });
+    }
+    const userDocRef = doc(db, 'users', user.uid);
+    await updateDoc(userDocRef, updates);
+    setUserProfile(prev => prev ? { ...prev, ...updates } : null);
   };
 
-  // Get the user's theme preference from metadata
   const getUserThemePreference = (): 'light' | 'dark' | null => {
-    if (!user) return null;
-    return user.user_metadata?.theme_preference || null;
+    return userProfile?.theme_preference || null;
   };
 
-  // Update just the theme preference
   const updateUserThemePreference = async (theme: 'light' | 'dark'): Promise<void> => {
     if (!user) throw new Error('No user logged in');
-    
-    const { data, error } = await supabase.auth.updateUser({
-      data: {
-        theme_preference: theme
-      }
-    });
-    
-    if (error) throw error;
-    
-    // Update the local user state with the new metadata
-    setUser(data.user);
+    await updateUserProfile({ theme_preference: theme });
   };
 
   const value = {
     user,
+    userProfile,
     loading,
     signUp,
     signIn,

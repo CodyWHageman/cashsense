@@ -14,17 +14,12 @@ import { Transaction, FundTransaction } from '../models/Transaction';
 import { calculateFundBalance, FundWithBalance } from '../utils/fundUtils';
 
 interface FundContextType {
-  // Fund state
   funds: FundWithBalance[];
   loading: boolean;
   error: Error | null;
-  
-  // Fund operations
   createNewFund: (fund: Omit<Fund, 'id'>) => Promise<Fund>;
   updateExistingFund: (fundId: string, fundData: Partial<Fund>) => Promise<Fund>;
   deleteExistingFund: (fundId: string) => Promise<void>;
-  
-  // Fund transactions
   addFundTransaction: (
     fundId: string, 
     transactionId: string, 
@@ -44,24 +39,22 @@ export function FundProvider({ children }: FundProviderProps) {
   const [funds, setFunds] = useState<FundWithBalance[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-  
-  // Add a ref to track loading state
   const loadingFundsRef = useRef(false);
-  
   const { user } = useAuth();
   
   const loadFunds = async () => {
-    if (!user?.id || loadingFundsRef.current) return;
+    if (!user?.uid || loadingFundsRef.current) return;
     
     loadingFundsRef.current = true;
     setLoading(true);
     
     try {
-      const userFunds = await getUserFunds(user.id);
+      const userFunds = await getUserFunds(user.uid);
       const fundsWithBalances = userFunds.map(calculateFundBalance);
       setFunds(fundsWithBalances);
       setError(null);
     } catch (error) {
+      // NOTE: If you see "The query requires an index" here, click the link in the console!
       console.error('Error loading funds:', error);
       setError(error instanceof Error ? error : new Error('Error loading funds'));
       enqueueSnackbar('Error loading funds', { variant: 'error' });
@@ -71,20 +64,26 @@ export function FundProvider({ children }: FundProviderProps) {
     }
   };
   
-  // Load funds when user changes
   useEffect(() => {
-    if (user?.id) {
+    if (user?.uid) {
       loadFunds();
     } else {
       setFunds([]);
+      setLoading(false);
     }
-  }, [user?.id]);
-  
+  }, [user?.uid]);
   
   // Create a new fund
   const createNewFund = async (fundData: Omit<Fund, 'id'>): Promise<Fund> => {
+    if (!user?.uid) throw new Error("User not authenticated");
+
     try {
-      const newFund = await createFund(fundData);
+      const fundWithUser = {
+        ...fundData,
+        userId: user.uid
+      };
+
+      const newFund = await createFund(fundWithUser);
       await loadFunds();
       enqueueSnackbar(`Fund "${newFund.name}" created successfully`, { variant: 'success' });
       return newFund;
@@ -94,7 +93,6 @@ export function FundProvider({ children }: FundProviderProps) {
     }
   };
   
-  // Update an existing fund
   const updateExistingFund = async (fundId: string, fundData: Partial<Fund>): Promise<Fund> => {
     try {
       const updatedFund = await updateFund(fundId, fundData);
@@ -107,11 +105,9 @@ export function FundProvider({ children }: FundProviderProps) {
     }
   };
   
-  // Delete a fund
   const deleteExistingFund = async (fundId: string): Promise<void> => {
     try {
       await deleteFund(fundId);
-      
       await loadFunds();
       enqueueSnackbar('Fund deleted successfully', { variant: 'success' });
     } catch (error) {
@@ -120,7 +116,6 @@ export function FundProvider({ children }: FundProviderProps) {
     }
   };
   
-  // Add a transaction to a fund
   const addFundTransaction = async (
     fundId: string, 
     transactionId: string, 
@@ -136,7 +131,6 @@ export function FundProvider({ children }: FundProviderProps) {
     }
   };
   
-  // Delete a fund transaction
   const deleteFundTransactionAndRefresh = async (fundTransaction: FundTransaction): Promise<void> => {
     try {
       await deleteFundTransaction(fundTransaction);
@@ -168,10 +162,8 @@ export function FundProvider({ children }: FundProviderProps) {
 
 export function useFund() {
   const context = useContext(FundContext);
-  
   if (context === undefined) {
     throw new Error('useFund must be used within a FundProvider');
   }
-  
   return context;
-} 
+}

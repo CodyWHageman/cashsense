@@ -1,94 +1,66 @@
-import { supabase } from './supabase';
+import { 
+  collection, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  doc, 
+  getDocs, 
+  query, 
+  where,
+  Timestamp 
+} from 'firebase/firestore';
+import { db } from './firebase';
 import { ImportTemplate, CreateImportTemplateDTO, UpdateImportTemplateDTO } from '../models/ImportTemplate';
 
-interface ImportTemplateDB {
-  id: string;
-  name: string;
-  amount_key: string;
-  transaction_date_key: string;
-  description_key: string;
-  file_type: 'CSV' | 'JSON';
-  user_id: string;
-  created_at: string;
-  updated_at: string;
-}
+// Helper: Remove undefined keys
+const sanitizeData = (data: any) => {
+  return Object.entries(data).reduce((acc, [key, value]) => {
+    if (value === undefined) return acc;
+    acc[key] = value;
+    return acc;
+  }, {} as any);
+};
 
-function mapToImportTemplate(dbTemplate: ImportTemplateDB): ImportTemplate {
+const mapTemplate = (doc: any): ImportTemplate => {
+  const data = doc.data();
   return {
-    id: dbTemplate.id,
-    name: dbTemplate.name,
-    amountKey: dbTemplate.amount_key,
-    transactionDateKey: dbTemplate.transaction_date_key,
-    descriptionKey: dbTemplate.description_key,
-    fileType: dbTemplate.file_type,
-    userId: dbTemplate.user_id,
-    createdAt: new Date(dbTemplate.created_at),
-    updatedAt: new Date(dbTemplate.updated_at)
+    id: doc.id,
+    name: data.name,
+    amountKey: data.amountKey,
+    transactionDateKey: data.transactionDateKey,
+    descriptionKey: data.descriptionKey,
+    fileType: data.fileType,
+    userId: data.userId,
+    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
+    updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : new Date()
   };
-}
-
-function mapToDBTemplate(template: CreateImportTemplateDTO): Omit<ImportTemplateDB, 'id' | 'created_at' | 'updated_at'> {
-  return {
-    name: template.name,
-    amount_key: template.amountKey,
-    transaction_date_key: template.transactionDateKey,
-    description_key: template.descriptionKey,
-    file_type: template.fileType,
-    user_id: template.userId
-  };
-}
-
-function mapUpdateToDBTemplate(template: UpdateImportTemplateDTO): Partial<Omit<ImportTemplateDB, 'id' | 'created_at' | 'updated_at'>> {
-  const dbTemplate: Partial<ImportTemplateDB> = {};
-
-  if (template.name !== undefined) dbTemplate.name = template.name;
-  if (template.amountKey !== undefined) dbTemplate.amount_key = template.amountKey;
-  if (template.transactionDateKey !== undefined) dbTemplate.transaction_date_key = template.transactionDateKey;
-  if (template.descriptionKey !== undefined) dbTemplate.description_key = template.descriptionKey;
-  if (template.fileType !== undefined) dbTemplate.file_type = template.fileType;
-
-  return dbTemplate;
-}
+};
 
 export async function getImportTemplates(userId: string): Promise<ImportTemplate[]> {
-  const { data, error } = await supabase
-    .from('import_templates')
-    .select('*')
-    .eq('user_id', userId)
-    .order('name');
-
-  if (error) throw error;
-  return (data || []).map(mapToImportTemplate);
+  const q = query(collection(db, 'import_templates'), where('userId', '==', userId));
+  const snap = await getDocs(q);
+  return snap.docs.map(mapTemplate);
 }
 
 export async function createImportTemplate(template: CreateImportTemplateDTO): Promise<ImportTemplate> {
-  const { data, error } = await supabase
-    .from('import_templates')
-    .insert([mapToDBTemplate(template)])
-    .select()
-    .single();
-
-  if (error) throw error;
-  return mapToImportTemplate(data);
+  const cleanTemplate = sanitizeData(template);
+  const ref = await addDoc(collection(db, 'import_templates'), {
+    ...cleanTemplate,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  });
+  return { id: ref.id, ...template } as any;
 }
 
 export async function updateImportTemplate(id: string, template: UpdateImportTemplateDTO): Promise<ImportTemplate> {
-  const { data, error } = await supabase
-    .from('import_templates')
-    .update(mapUpdateToDBTemplate(template))
-    .eq('id', id)
-    .select()
-    .single();
-
-  if (error) throw error;
-  return mapToImportTemplate(data);
+  const cleanTemplate = sanitizeData(template);
+  await updateDoc(doc(db, 'import_templates', id), {
+    ...cleanTemplate,
+    updatedAt: new Date()
+  });
+  return { id, ...template } as any;
 }
 
 export async function deleteImportTemplate(id: string): Promise<void> {
-  const { error } = await supabase
-    .from('import_templates')
-    .delete()
-    .eq('id', id);
-
-  if (error) throw error;
-} 
+  await deleteDoc(doc(db, 'import_templates', id));
+}

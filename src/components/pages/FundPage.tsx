@@ -1,7 +1,7 @@
 import { Box } from '@mui/material';
 import { FundManager } from '../funds/FundManager';
-import { Fund } from '../../models/Budget';
 import { useAuth } from '../../contexts/AuthContext';
+// Note: Fund import was unused, removed it
 
 function FundPage() {
   const { user } = useAuth();
@@ -12,7 +12,7 @@ function FundPage() {
 
   return (
     <Box sx={{ p: 3 }}>
-      <FundManager userId={user.id} />
+      <FundManager userId={user.uid} />
     </Box>
   );
 } 

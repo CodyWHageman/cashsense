@@ -1,216 +1,213 @@
-import { supabase } from './supabase';
+import { 
+  collection, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  doc, 
+  getDocs, 
+  getDoc,
+  query, 
+  where, 
+  writeBatch,
+  Timestamp,
+  orderBy,
+  documentId
+} from 'firebase/firestore';
+import { db } from './firebase';
 import { Fund } from '../models/Budget';
 import { Transaction, FundTransaction, FundTransactionCreateDTO } from '../models/Transaction';
+import { mapTransaction } from './transactionService';
 
-// Helper functions to map database fields to camelCase
-const mapTransaction = (data: any): Transaction => ({
-  id: data.id,
-  hashId: data.hash_id,
-  amount: data.amount,
-  date: data.date,
-  description: data.description,
-  expenseId: data.expense_id,
-  createdAt: data.created_at,
-  updatedAt: data.updated_at,
-  isSplit: data.is_split
-});
+// Helper: Remove undefined keys
+const sanitizeData = (data: any) => {
+  return Object.entries(data).reduce((acc, [key, value]) => {
+    if (value === undefined) return acc;
+    acc[key] = value;
+    return acc;
+  }, {} as any);
+};
 
-const mapFundTransaction = (data: any): FundTransaction => ({
-  id: data.id,
-  fundId: data.fund_id,
-  transactionId: data.transaction_id,
-  type: data.type,
-  transferComplete: data.transfer_complete,
-  createdAt: data.created_at,
-  updatedAt: data.updated_at,
-  transaction: data.transaction ? mapTransaction(data.transaction) : undefined,
-  transferTransactionId: data.transfer_transaction_id
-});
+const mapFundTransaction = (doc: any, transaction?: Transaction): FundTransaction => {
+  const data = doc.data();
+  return {
+    id: doc.id,
+    fundId: data.fundId,
+    transactionId: data.transactionId,
+    type: data.type,
+    transferComplete: data.transferComplete,
+    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
+    updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : new Date(),
+    transaction: transaction,
+    transferTransactionId: data.transferTransactionId
+  };
+};
 
-const mapFund = (data: any): Fund => ({
-  id: data.id,
-  name: data.name,
-  description: data.description,
-  targetAmount: data.target_amount,
-  userId: data.user_id,
-  createdAt: data.created_at,
-  updatedAt: data.updated_at,
-  fundTransactions: data.fund_transactions ? data.fund_transactions.map(mapFundTransaction) : []
-});
+const mapFund = (doc: any, transactions: FundTransaction[] = []): Fund => {
+  const data = doc.data();
+  return {
+    id: doc.id,
+    name: data.name,
+    description: data.description,
+    targetAmount: data.targetAmount,
+    userId: data.userId,
+    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
+    updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : new Date(),
+    fundTransactions: transactions
+  };
+};
 
-// Create a new fund
 export const createFund = async (fund: Omit<Fund, 'id'>): Promise<Fund> => {
-  const { data, error } = await supabase
-    .from('funds')
-    .insert([{
-        name: fund.name,
-        description: fund.description,
-        target_amount: fund.targetAmount,
-        user_id: fund.userId,
-        created_at: new Date(),
-        updated_at: new Date()
-    }])
-    .select(`
-      *,
-      fund_transactions(
-        *,
-        transaction:transactions!fund_transactions_transaction_id_fkey(*),
-        transfer_transaction:transactions!fund_transactions_transfer_transaction_id_fkey (*)
-      )
-    `)
-    .single();
-
-  if (error) throw error;
-  return mapFund(data);
+  const cleanFund = sanitizeData(fund);
+  const docRef = await addDoc(collection(db, 'funds'), {
+    ...cleanFund,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  });
+  return mapFund({ id: docRef.id, data: () => fund });
 };
 
-// Get all funds for a user
+// UPDATED: Fetches deep data for all funds so balances calculate correctly
 export const getUserFunds = async (userId: string): Promise<Fund[]> => {
-  const { data, error } = await supabase
-    .from('funds')
-    .select(`
-      *,
-      fund_transactions(
-        *,
-        transaction:transactions!fund_transactions_transaction_id_fkey(*),
-        transfer_transaction:transactions!fund_transactions_transfer_transaction_id_fkey (*)
-      )
-    `)
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
+  const q = query(collection(db, 'funds'), where('userId', '==', userId), orderBy('createdAt', 'desc'));
+  const snap = await getDocs(q);
+  
+  if (snap.empty) return [];
 
-  if (error) throw error;
-  return (data || []).map(mapFund);
+  // Reuse getFundById to fetch transactions for each fund
+  // This ensures 'fundTransactions' is populated, which calculateFundBalance needs.
+  const funds = await Promise.all(snap.docs.map(async (doc) => {
+     return await getFundById(doc.id) as Fund;
+  }));
+
+  return funds.filter(Boolean);
 };
 
-// Get a single fund by ID
 export const getFundById = async (id: string): Promise<Fund | null> => {
-  const { data, error } = await supabase
-    .from('funds')
-    .select(`
-      *,
-      fund_transactions(
-        *,
-        transaction:transactions!fund_transactions_transaction_id_fkey(*),
-        transfer_transaction:transactions!fund_transactions_transfer_transaction_id_fkey (*)
-      )
-    `)
-    .eq('id', id)
-    .single();
+  const snap = await getDoc(doc(db, 'funds', id));
+  if (!snap.exists()) return null;
 
-  if (error) throw error;
-  return data ? mapFund(data) : null;
+  const transQ = query(collection(db, 'fund_transactions'), where('fundId', '==', id));
+  const transSnap = await getDocs(transQ);
+
+  const transactionIds = transSnap.docs.map(d => d.data().transactionId).filter(Boolean);
+  
+  let transactionMap: Record<string, Transaction> = {};
+  if (transactionIds.length > 0) {
+    const chunks = [];
+    for (let i = 0; i < transactionIds.length; i += 30) {
+        chunks.push(transactionIds.slice(i, i + 30));
+    }
+    
+    for (const chunk of chunks) {
+        const tQ = query(collection(db, 'transactions'), where(documentId(), 'in', chunk)); 
+        const tSnap = await getDocs(tQ);
+        tSnap.forEach(d => {
+            transactionMap[d.id] = mapTransaction(d);
+        });
+    }
+  }
+
+  const fundTransactions = transSnap.docs.map(d => {
+    const data = d.data();
+    return mapFundTransaction(d, transactionMap[data.transactionId]);
+  });
+
+  return mapFund(snap, fundTransactions);
 };
 
-// Update a fund
 export const updateFund = async (id: string, updates: Partial<Fund>): Promise<Fund> => {
-  const { data, error } = await supabase
-    .from('funds')
-    .update({
-        name: updates.name,
-        description: updates.description,
-        target_amount: updates.targetAmount,
-        updated_at: new Date()
-    })
-    .eq('id', id)
-    .select(`
-      *,
-      fund_transactions(
-        *,
-        transaction:transactions!fund_transactions_transaction_id_fkey(*),
-        transfer_transaction:transactions!fund_transactions_transfer_transaction_id_fkey (*)
-      )
-    `)
-    .single();
-
-  if (error) throw error;
-  return mapFund(data);
+  const cleanUpdates = sanitizeData(updates);
+  await updateDoc(doc(db, 'funds', id), {
+    ...cleanUpdates,
+    updatedAt: new Date()
+  });
+  return { id, ...updates } as any;
 };
 
-// Delete a fund
 export const deleteFund = async (id: string): Promise<void> => {
-  const { error } = await supabase
-    .from('funds')
-    .delete()
-    .eq('id', id);
-
-  if (error) throw error;
+  await deleteDoc(doc(db, 'funds', id));
 };
 
-// Create a fund transaction
 export const createFundTransaction = async (
   fundId: string,
   transactionId: string,
   type: 'deposit' | 'withdrawal',
   transferComplete: boolean = false
 ): Promise<void> => {
-  const { error } = await supabase
-    .from('fund_transactions')
-    .insert([{
-      fund_id: fundId,
-      transaction_id: transactionId,
-      type,
-      transfer_complete: transferComplete,
-      created_at: new Date(),
-      updated_at: new Date()
-    }]);
-
-  if (error) throw error;
+  await addDoc(collection(db, 'fund_transactions'), {
+    fundId,
+    transactionId,
+    type,
+    transferComplete,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  });
 };
 
 export const createFundTransactions = async (fundTransactions: FundTransactionCreateDTO[]): Promise<void> => {
-  const { error } = await supabase
-    .from('fund_transactions')
-    .insert(fundTransactions.map(mapFundTransaction));
-
-  if (error) throw error;
-};  
-
-// Update fund transaction transfer status
-export const updateFundTransactionStatus = async (
-  id: string,
-  transferComplete: boolean
-): Promise<void> => {
-  const { error } = await supabase
-    .from('fund_transactions')
-    .update({ transfer_complete: transferComplete, updated_at: new Date() })
-    .eq('id', id);
-
-  if (error) throw error;
+  const batch = writeBatch(db);
+  fundTransactions.forEach(ft => {
+    const cleanFt = sanitizeData(ft);
+    const ref = doc(collection(db, 'fund_transactions'));
+    batch.set(ref, { ...cleanFt, createdAt: new Date(), updatedAt: new Date() });
+  });
+  await batch.commit();
 };
 
-// Get fund balance
+export const updateFundTransactionStatus = async (id: string, transferComplete: boolean): Promise<void> => {
+  await updateDoc(doc(db, 'fund_transactions', id), {
+    transferComplete,
+    updatedAt: new Date()
+  });
+};
+
 export const getFundBalance = async (fundId: string): Promise<number> => {
-  const { data: transactions, error } = await supabase
-    .from('fund_transactions')
-    .select(`
-      type,
-      transaction:transactions!fund_transactions_transaction_id_fkey(amount)
-    `)
-    .eq('fund_id', fundId);
+  const q = query(collection(db, 'fund_transactions'), where('fundId', '==', fundId));
+  const snap = await getDocs(q);
+  
+  if (snap.empty) return 0;
 
-  if (error) throw error;
+  const fundTransactions = snap.docs.map(d => d.data());
+  const transactionIds = fundTransactions.map(d => d.transactionId).filter(Boolean);
+  
+  if (transactionIds.length === 0) return 0;
 
-  return transactions.reduce((balance, ft) => {
-    const amount = ft.transaction[0].amount;
-    return ft.type === 'deposit' ? balance + amount : balance - amount;
-  }, 0);
+  const chunks = [];
+  for (let i = 0; i < transactionIds.length; i += 30) {
+      chunks.push(transactionIds.slice(i, i + 30));
+  }
+  
+  let balance = 0;
+  const amountsMap: Record<string, number> = {};
+
+  for (const chunk of chunks) {
+    const tQ = query(collection(db, 'transactions'), where(documentId(), 'in', chunk));
+    const tSnap = await getDocs(tQ);
+    tSnap.forEach(d => {
+        amountsMap[d.id] = d.data().amount || 0;
+    });
+  }
+
+  fundTransactions.forEach(ft => {
+      const amount = amountsMap[ft.transactionId] || 0;
+      if (ft.type === 'deposit') {
+          balance += amount;
+      } else {
+          balance -= amount;
+      }
+  });
+
+  return balance;
 };
 
 export const getPendingFundTransactions = async (fundId: string): Promise<FundTransaction[]> => {
-  const { data, error } = await supabase
-    .from('fund_transactions')
-    .select(`
-      *,
-        transaction:transactions!fund_transactions_transaction_id_fkey(*),
-        transfer_transaction:transactions!fund_transactions_transfer_transaction_id_fkey (*)
-    `)
-    .eq('fund_id', fundId)
-    .eq('transfer_complete', false)
-    .order('created_at', { ascending: true });
-
-  if (error) throw error;
-  return (data || []).map(mapFundTransaction);
+  const q = query(
+    collection(db, 'fund_transactions'), 
+    where('fundId', '==', fundId),
+    where('transferComplete', '==', false)
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map(d => mapFundTransaction(d));
 };
 
 export const markFundTransferComplete = async (
@@ -218,69 +215,32 @@ export const markFundTransferComplete = async (
   fundTransactionId: string,
   transferTransactionId: string
 ): Promise<void> => {
-  const { error } = await supabase
-    .from('fund_transactions')
-    .update({ 
-      transfer_complete: true,
-      transfer_transaction_id: transferTransactionId 
-    })
-    .eq('id', fundTransactionId)
-    .eq('fund_id', fundId);
-
-  if (error) throw error;
+  await updateDoc(doc(db, 'fund_transactions', fundTransactionId), {
+    transferComplete: true,
+    transferTransactionId,
+    updatedAt: new Date()
+  });
 };
 
 export const updateFundTransaction = async (
   fundTransactionId: string,
-  updates: {
-    transferTransactionId?: string;
-    transferComplete?: boolean;
-  }
+  updates: { transferTransactionId?: string; transferComplete?: boolean; }
 ): Promise<void> => {
-  const { error } = await supabase
-    .from('fund_transactions')
-    .update({
-      transfer_transaction_id: updates.transferTransactionId,
-      transfer_complete: updates.transferComplete,
-      updated_at: new Date()
-    })
-    .eq('id', fundTransactionId);
-
-  if (error) throw error;
+  const cleanUpdates = sanitizeData(updates);
+  await updateDoc(doc(db, 'fund_transactions', fundTransactionId), {
+    ...cleanUpdates,
+    updatedAt: new Date()
+  });
 };
 
-// Delete a fund transaction by deleting its related transactions
 export const deleteFundTransaction = async (fundTransaction: FundTransaction): Promise<void> => {
-  // Collect all transaction IDs to delete
-  const transactionIds: string[] = [];
-  
-  // Add the main transaction ID if it exists
+  const batch = writeBatch(db);
+  batch.delete(doc(db, 'fund_transactions', fundTransaction.id));
   if (fundTransaction.transactionId) {
-    transactionIds.push(fundTransaction.transactionId);
+    batch.delete(doc(db, 'transactions', fundTransaction.transactionId));
   }
-  
-  // Add the transfer transaction ID if it exists
   if (fundTransaction.transferTransactionId) {
-    transactionIds.push(fundTransaction.transferTransactionId);
+    batch.delete(doc(db, 'transactions', fundTransaction.transferTransactionId));
   }
-  
-  // If we have transactions to delete
-  if (transactionIds.length > 0) {
-    // Delete all related transactions in a single call
-    // This will cascade to delete the fund_transaction record
-    const { error } = await supabase
-      .from('transactions')
-      .delete()
-      .in('id', transactionIds);
-    
-    if (error) throw error;
-  } else {
-    // Fallback: If no transaction IDs (unusual case), delete the fund_transaction directly
-    const { error } = await supabase
-      .from('fund_transactions')
-      .delete()
-      .eq('id', fundTransaction.id);
-      
-    if (error) throw error;
-  }
-}; 
+  await batch.commit();
+};

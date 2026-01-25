@@ -64,7 +64,8 @@ export function BudgetProvider({ children }: BudgetProviderProps) {
   
   // Load budget when month/year/user changes
   useEffect(() => {
-    if (!user?.id) return;
+    // MIGRATION FIX: Firebase uses 'uid', not 'id'
+    if (!user?.uid) return;
     
     const loadBudget = async () => {
       try {
@@ -77,7 +78,7 @@ export function BudgetProvider({ children }: BudgetProviderProps) {
             const budget = await getBudgetByMonthAndYear(
               getDatabaseMonth(selectedMonth), 
               selectedYear, 
-              user.id
+              user.uid // MIGRATION FIX: Use uid
             );
             
             if (budget) {
@@ -90,6 +91,7 @@ export function BudgetProvider({ children }: BudgetProviderProps) {
             }
             setError(null);
           } catch (error: any) {
+            // Note: Firestore might throw permission errors or index errors here
             if (!error.message?.includes('no rows in result set')) {
               console.error('Error loading budget:', error);
               setError(error instanceof Error ? error : new Error('Unknown error loading budget'));
@@ -107,7 +109,7 @@ export function BudgetProvider({ children }: BudgetProviderProps) {
     };
     
     loadBudget();
-  }, [user?.id, selectedMonth, selectedYear]);
+  }, [user?.uid, selectedMonth, selectedYear]); // MIGRATION FIX: Dependency changed to user.uid
   
   // Handler functions
   const handleMonthChange = (month: number, year: number) => {
@@ -202,14 +204,15 @@ export function BudgetProvider({ children }: BudgetProviderProps) {
   };
 
   const handleGenerateBudget = async () => {
-    if (!user?.id) return;
+    // MIGRATION FIX: Firebase uses 'uid'
+    if (!user?.uid) return;
 
     try {
       setLoading(true);
       const newBudget = await createBudget({
         month: getDatabaseMonth(selectedMonth),
         year: selectedYear,
-        userId: user.id
+        userId: user.uid // MIGRATION FIX: Use uid
       });
 
       setCurrentBudget({
@@ -292,4 +295,4 @@ export function useBudget() {
   }
   
   return context;
-} 
+}

@@ -128,13 +128,13 @@ export default function ImportTemplateManager() {
 
   useEffect(() => {
     loadTemplates();
-  }, [user?.id]);
+  }, [user?.uid]);
 
   const loadTemplates = async () => {
-    if (!user?.id) return;
+    if (!user?.uid) return;
 
     try {
-      const data = await getImportTemplates(user.id);
+      const data = await getImportTemplates(user.uid);
       setTemplates(data);
     } catch (error) {
       console.error('Error loading templates:', error);
@@ -143,7 +143,7 @@ export default function ImportTemplateManager() {
   };
 
   const handleSave = async (templateData: Partial<ImportTemplate>) => {
-    if (!user?.id) return;
+    if (!user?.uid) return;
 
     try {
       if (templateData.id) {
@@ -165,7 +165,7 @@ export default function ImportTemplateManager() {
           transactionDateKey: templateData.transactionDateKey!,
           descriptionKey: templateData.descriptionKey!,
           fileType: templateData.fileType!,
-          userId: user.id
+          userId: user.uid
         };
         await createImportTemplate(createData);
         enqueueSnackbar('Template created successfully', { variant: 'success' });

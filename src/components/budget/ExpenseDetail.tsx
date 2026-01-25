@@ -199,7 +199,7 @@ function ExpenseDetail({
           <FundSelector
             value={expense.fundId || null}
             onChange={handleFundChange}
-            userId={user?.id || ''}
+            userId={user?.uid || ''}
           />
         </Box>
       </Box>

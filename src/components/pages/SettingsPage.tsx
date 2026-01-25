@@ -1,110 +1,102 @@
-import React, { useState, useEffect } from 'react';
-import {
-  Box,
-  Paper,
-  Typography,
-  TextField,
-  Button,
+import React from 'react';
+import { 
+  Box, 
+  Typography, 
+  Paper, 
+  Divider, 
+  Switch, 
   FormControlLabel,
-  Switch,
-  CircularProgress,
-  Divider
+  Avatar,
+  Link,
+  Button
 } from '@mui/material';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useSnackbar } from 'notistack';
 import ImportTemplateManager from '../settings/ImportTemplateManager';
 
-const SettingsPage: React.FC = () => {
-  const { user, updateUserProfile } = useAuth();
+function SettingsPage() {
+  const { user, updateUserThemePreference } = useAuth();
   const { mode, toggleColorMode } = useTheme();
-  const { enqueueSnackbar } = useSnackbar();
-  const [loading, setLoading] = useState(true);
-  const [displayName, setDisplayName] = useState('');
-  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    // Set display name directly from user metadata
-    setDisplayName(user?.user_metadata?.display_name || '');
-    setLoading(false);
-  }, [user]);
-
-  const handleSave = async () => {
-    if (!user) return;
-    setSaving(true);
-    try {
-      await updateUserProfile({ display_name: displayName });
-      enqueueSnackbar('Settings saved successfully', { variant: 'success' });
-    } catch (error) {
-      console.error('Error saving settings:', error);
-      enqueueSnackbar('Error saving settings', { variant: 'error' });
-    } finally {
-      setSaving(false);
+  const handleThemeChange = async () => {
+    toggleColorMode();
+    const newTheme = mode === 'light' ? 'dark' : 'light';
+    if (user) {
+      await updateUserThemePreference(newTheme);
     }
   };
 
-  if (loading) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
-        <CircularProgress />
-      </Box>
-    );
-  }
-
   return (
-    <Box p={3} maxWidth={600} mx="auto">
-      <Paper sx={{ p: 3 }}>
-        <Typography variant="h5" gutterBottom>
-          Settings
+    <Box sx={{ p: 3, maxWidth: 800, mx: 'auto' }}>
+      <Typography variant="h4" gutterBottom>
+        Settings
+      </Typography>
+
+      {/* Profile Section */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h6" gutterBottom>
+          Profile
         </Typography>
-
-        <Box my={3}>
-          <Typography variant="h6" gutterBottom>
-            Profile
-          </Typography>
-          <TextField
-            fullWidth
-            label="Display Name"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            margin="normal"
-            variant="outlined"
-          />
-        </Box>
-
-        <Divider sx={{ my: 3 }} />
-
-        <Box my={3}>
-          <Typography variant="h6" gutterBottom>
-            Appearance
-          </Typography>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={mode === 'dark'}
-                onChange={toggleColorMode}
-                name="darkMode"
-              />
-            }
-            label="Dark Mode"
-          />
-        </Box>
-
-        <Box mt={4}>
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={handleSave}
-            disabled={saving}
-          >
-            {saving ? <CircularProgress size={24} /> : 'Save Changes'}
-          </Button>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, mb: 2 }}>
+          <Box sx={{ position: 'relative' }}>
+            <Avatar 
+              src={user?.photoURL || undefined}
+              alt={user?.displayName || 'User'} 
+              sx={{ width: 80, height: 80, fontSize: '2rem' }}
+            >
+              {user?.email?.charAt(0).toUpperCase()}
+            </Avatar>
+          </Box>
+          
+          <Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+              {user?.email}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" paragraph>
+              Profile picture provided by Gravatar.
+            </Typography>
+            <Button 
+              component={Link}
+              href="https://gravatar.com" 
+              target="_blank"
+              rel="noopener noreferrer"
+              variant="outlined" 
+              size="small"
+              endIcon={<OpenInNewIcon />}
+              sx={{ textTransform: 'none' }}
+            >
+              Change on Gravatar
+            </Button>
+          </Box>
         </Box>
       </Paper>
 
-      <ImportTemplateManager />
+      {/* Theme Section */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h6" gutterBottom>
+          Appearance
+        </Typography>
+        <Divider sx={{ mb: 2 }} />
+        <FormControlLabel
+          control={<Switch checked={mode === 'dark'} onChange={handleThemeChange} />}
+          label="Dark Mode"
+        />
+      </Paper>
+
+      {/* Import Templates Section */}
+      <Paper sx={{ p: 3 }}>
+        <Typography variant="h6" gutterBottom>
+          Import Templates
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Configure templates for importing CSV bank statements.
+        </Typography>
+        <Divider sx={{ mb: 2 }} />
+        {user?.uid && <ImportTemplateManager />}
+      </Paper>
     </Box>
   );
-};
+}
 
-export default SettingsPage; 
+export default SettingsPage;
