@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Box, Button, Menu, MenuItem, Tooltip, Zoom } from '@mui/material';
-import { SideNavigation } from '../navigation/SideNavigation';
+import  SideNavigation from '../navigation/SideNavigation';
 import { useResponsive } from '../../hooks/useResponsive';
 import { MobileNavigation } from '../navigation/MobileNavigation';
 import { useAuth } from '../../contexts/AuthContext';
@@ -57,19 +57,13 @@ export function MainLayout({ children }: MainLayoutProps) {
   };
 
   // Get display name directly from user metadata
-  const displayName = user?.user_metadata?.display_name || null;
+  const displayName = user?.displayName || null;
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
       {!isMobile && (
         <Box sx={{ width: '250px', flexShrink: 0 }}>
-          <SideNavigation 
-            currentView={currentView}
-            setCurrentView={handleViewChange}
-            userEmail={user?.email}
-            displayName={displayName}
-            onUserMenuClick={handleUserMenuClick}
-          />
+          <SideNavigation />
         </Box>
       )}
       

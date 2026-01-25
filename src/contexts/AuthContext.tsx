@@ -12,6 +12,7 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
+import { getGravatarUrl } from '../utils/gravatarUtils'; // Import the new utility
 
 interface UserProfile {
   id: string;
@@ -22,7 +23,7 @@ interface UserProfile {
 
 interface AuthContextType {
   user: User | null;
-  userProfile: UserProfile | null; // Extended data from Firestore
+  userProfile: UserProfile | null;
   loading: boolean;
   signUp: (email: string, password: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
@@ -41,25 +42,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Sync Auth State and fetch extra Firestore Profile data
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (currentUser && !currentUser.photoURL && currentUser.email) {
+        const gravatarUrl = getGravatarUrl(currentUser.email);
+        try {
+            await updateProfile(currentUser, { photoURL: gravatarUrl });
+            // Force a refresh of the user object to reflect the change immediately
+            // Note: In some Firebase versions, we might need to reload, but usually object update works for local state
+        } catch (e) {
+            console.error("Failed to set Gravatar", e);
+        }
+      }
+
       setUser(currentUser);
       
       if (currentUser) {
         try {
+          // MIGRATION FIX: Use currentUser.uid
           const userDocRef = doc(db, 'users', currentUser.uid);
           const userDoc = await getDoc(userDocRef);
           
           if (userDoc.exists()) {
             setUserProfile(userDoc.data() as UserProfile);
           } else {
-            // Create initial profile if it doesn't exist
             const newProfile: UserProfile = {
               id: currentUser.uid,
               email: currentUser.email,
               display_name: currentUser.displayName,
-              theme_preference: 'light' // default
+              theme_preference: 'light'
             };
             await setDoc(userDocRef, newProfile);
             setUserProfile(newProfile);
@@ -80,7 +91,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signUp = async (email: string, password: string) => {
     const { user: newUser } = await createUserWithEmailAndPassword(auth, email, password);
     
-    // Create the user document in Firestore immediately
+    // Assign Gravatar immediately on signup
+    if (newUser.email) {
+        const gravatarUrl = getGravatarUrl(newUser.email);
+        await updateProfile(newUser, { photoURL: gravatarUrl });
+    }
+
     const newProfile: UserProfile = {
         id: newUser.uid,
         email: newUser.email,
@@ -110,17 +126,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateUserProfile = async (updates: Partial<UserProfile>): Promise<void> => {
     if (!user) throw new Error('No user logged in');
-    
-    // Update Auth Profile (Display Name)
     if (updates.display_name) {
       await updateProfile(user, { displayName: updates.display_name });
     }
-
-    // Update Firestore Profile (Theme, etc)
     const userDocRef = doc(db, 'users', user.uid);
     await updateDoc(userDocRef, updates);
-    
-    // Update local state
     setUserProfile(prev => prev ? { ...prev, ...updates } : null);
   };
 

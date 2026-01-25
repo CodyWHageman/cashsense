@@ -211,7 +211,7 @@ export default function TransactionImportModal({
     async function loadTemplates() {
       try {
         if(user) {
-          const templates = await getImportTemplates(user?.id);
+          const templates = await getImportTemplates(user?.uid);
           setTemplates(templates);
           if (templates.length > 0) {
             setSelectedTemplate(templates[0].id);
