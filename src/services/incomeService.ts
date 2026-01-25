@@ -1,105 +1,92 @@
-import { supabase } from './supabase';
+import { 
+  collection, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  doc, 
+  getDocs, 
+  query, 
+  where, 
+  writeBatch,
+  Timestamp 
+} from 'firebase/firestore';
+import { db } from './firebase';
 import { BudgetIncome, BudgetIncomeCreateDTO } from '../models/Budget';
 
-// Helper function to map database fields to camelCase
-const mapIncome = (data: any): BudgetIncome => ({
-  id: data.id,
-  name: data.name,
-  amount: data.amount,
-  frequency: data.frequency,
-  expectedDate: data.expected_date,
-  budgetId: data.budget_id,
-  createdAt: data.created_at,
-  updatedAt: data.updated_at
-});
+const mapIncome = (doc: any): BudgetIncome => {
+  const data = doc.data();
+  return {
+    id: doc.id,
+    name: data.name,
+    amount: data.amount,
+    frequency: data.frequency,
+    expectedDate: data.expectedDate instanceof Timestamp ? data.expectedDate.toDate() : data.expectedDate ? new Date(data.expectedDate) : null,
+    budgetId: data.budgetId,
+    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
+    updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : new Date(),
+    transactions: []
+  };
+};
 
-const mapCreateDTOToDBInsert = (income: BudgetIncomeCreateDTO): any => ({
-  name: income.name,
-  amount: income.amount,
-  frequency: income.frequency,
-  expected_date: income.expectedDate,
-  budget_id: income.budgetId,
-  created_at: new Date(),
-  updated_at: new Date()
-});
-
-// Create a new income
 export const createIncome = async (income: BudgetIncomeCreateDTO): Promise<BudgetIncome> => {
-    const { data, error } = await supabase
-    .from('budget_incomes')
-    .insert([mapCreateDTOToDBInsert(income)])
-    .select()
-    .single();
-
-  if (error) throw error;
-  return mapIncome(data);
+  const docRef = await addDoc(collection(db, 'budget_incomes'), {
+    ...income,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  });
+  return { id: docRef.id, ...income, createdAt: new Date(), updatedAt: new Date() } as any;
 };
 
 export const createIncomes = async (incomes: BudgetIncomeCreateDTO[]): Promise<BudgetIncome[]> => {
-    const { data, error } = await supabase
-    .from('budget_incomes')
-    .insert(incomes.map(mapCreateDTOToDBInsert))
-    .select();
+  const batch = writeBatch(db);
+  const results: BudgetIncome[] = [];
 
-  if (error) throw error;
-  return data.map(mapIncome);
-};  
+  incomes.forEach(inc => {
+    const ref = doc(collection(db, 'budget_incomes'));
+    batch.set(ref, {
+      ...inc,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    results.push({ id: ref.id, ...inc } as any);
+  });
 
-// Get all incomes for a budget
+  await batch.commit();
+  return results;
+};
+
 export const getBudgetIncomes = async (budgetId: string): Promise<BudgetIncome[]> => {
-  const { data, error } = await supabase
-    .from('budget_incomes')
-    .select('*')
-    .eq('budget_id', budgetId);
-
-  if (error) throw error;
-  return (data || []).map(mapIncome);
+  const q = query(collection(db, 'budget_incomes'), where('budgetId', '==', budgetId));
+  const snap = await getDocs(q);
+  return snap.docs.map(mapIncome);
 };
 
-// Update an income
 export const updateIncome = async (id: string, updates: Partial<BudgetIncome>): Promise<BudgetIncome> => {
-  const { data, error } = await supabase
-    .from('budget_incomes')
-    .update({
-        name: updates.name,
-        amount: updates.amount,
-        frequency: updates.frequency,
-        expected_date: updates.expectedDate,
-        updated_at: new Date()
-    })
-    .eq('id', id)
-    .select()
-    .single();
-
-  if (error) throw error;
-  return mapIncome(data);
+  const ref = doc(db, 'budget_incomes', id);
+  await updateDoc(ref, {
+    ...updates,
+    updatedAt: new Date()
+  });
+  return { id, ...updates } as any;
 };
 
-// Delete an income
 export const deleteIncome = async (id: string): Promise<void> => {
-  const { error } = await supabase
-    .from('budget_incomes')
-    .delete()
-    .eq('id', id);
-
-  if (error) throw error;
+  await deleteDoc(doc(db, 'budget_incomes', id));
 };
 
-// Batch update incomes
 export const updateIncomes = async (incomes: BudgetIncome[]): Promise<BudgetIncome[]> => {
-  const { data, error } = await supabase
-    .from('budget_incomes')
-    .upsert(incomes.map(income => ({
-      id: income.id,
-      name: income.name,
-      amount: income.amount,
-      frequency: income.frequency,
-      expected_date: income.expectedDate,
-      budget_id: income.budgetId,
-      updated_at: new Date()
-    })))
-    .select();
-
-  if (error) throw error;
-  return (data || []).map(mapIncome);
-}; 
+  const batch = writeBatch(db);
+  incomes.forEach(inc => {
+    const ref = doc(db, 'budget_incomes', inc.id);
+    batch.update(ref, {
+      name: inc.name,
+      amount: inc.amount,
+      frequency: inc.frequency,
+      expectedDate: inc.expectedDate,
+      updatedAt: new Date()
+    });
+  });
+  
+  await batch.commit();
+  return incomes;
+};

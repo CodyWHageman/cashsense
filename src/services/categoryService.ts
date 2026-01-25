@@ -1,126 +1,125 @@
-import { supabase } from './supabase';
+import { 
+  collection, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  doc, 
+  getDocs, 
+  query, 
+  where, 
+  writeBatch,
+  Timestamp 
+} from 'firebase/firestore';
+import { db } from './firebase';
 import { BudgetCategory, ExpenseCategory, ExpenseCategoryCreateDTO, ExpenseCategoryUpdateDTO } from '../models/Budget';
 
-// Helper functions to map database fields to camelCase
-const mapExpenseCategory = (data: any): ExpenseCategory => ({
-  id: data.id,
-  name: data.name,
-  color: data.color,
-  userId: data.user_id,
-  createdAt: data.created_at
-});
+const mapExpenseCategory = (doc: any): ExpenseCategory => {
+  const data = doc.data();
+  return {
+    id: doc.id,
+    name: data.name,
+    color: data.color,
+    userId: data.userId,
+    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date()
+  };
+};
 
-const mapBudgetCategory = (data: any): BudgetCategory => ({
-  id: data.id,
-  budgetId: data.budget_id,
-  category: mapExpenseCategory(data.expense_category),
-  createdAt: data.created_at,
-  updatedAt: data.updated_at,
-  sequenceNumber: data.sequence_number
-});
+const mapBudgetCategory = (doc: any, categoryData: ExpenseCategory): BudgetCategory => {
+  const data = doc.data();
+  return {
+    id: doc.id,
+    budgetId: data.budgetId,
+    category: categoryData,
+    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
+    updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : new Date(),
+    sequenceNumber: data.sequenceNumber
+  };
+};
 
-// Create a new category and associate it with a budget
 export const createCategory = async (
   newCategory: ExpenseCategoryCreateDTO,
   budgetId: string,
   sequenceNumber: number
 ): Promise<BudgetCategory> => {
-  // Insert the category
-  const { data: categoryData, error: categoryError } = await supabase
-    .from('expense_categories')
-    .insert([{
-      name: newCategory.name,
-      color: newCategory.color,
-      user_id: newCategory.userId,
-      created_at: new Date()
-    }])
-    .select()
-    .single();
+  const batch = writeBatch(db);
 
-  if (categoryError) throw categoryError;
+  // 1. Create Expense Category (The definition)
+  const categoryRef = doc(collection(db, 'expense_categories'));
+  const categoryData = {
+    name: newCategory.name,
+    color: newCategory.color,
+    userId: newCategory.userId,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  };
+  batch.set(categoryRef, categoryData);
 
-  // Create budget-category association
-  const { data: associationData, error: associationError } = await supabase
-    .from('budget_categories')
-    .insert([{
-      budget_id: budgetId,
-      category_id: categoryData.id,
-      created_at: new Date(),
-      sequence_number: sequenceNumber
-    }])
-    .select(`
-      *,
-      expense_category: expense_categories!inner(*)
-    `)
-    .single();
+  // 2. Create Budget Category (The link)
+  const budgetCategoryRef = doc(collection(db, 'budget_categories'));
+  const budgetCategoryData = {
+    budgetId: budgetId,
+    categoryId: categoryRef.id,
+    sequenceNumber: sequenceNumber,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  };
+  batch.set(budgetCategoryRef, budgetCategoryData);
 
-  if (associationError) throw associationError;
+  await batch.commit();
 
-  return mapBudgetCategory(associationData);
+  return mapBudgetCategory(
+    { id: budgetCategoryRef.id, data: () => budgetCategoryData }, 
+    { id: categoryRef.id, ...categoryData } as ExpenseCategory
+  );
 };
 
-// Update a category
 export const updateExpenseCategory = async (
   id: string,
   { name, color }: ExpenseCategoryUpdateDTO
 ): Promise<ExpenseCategory> => {
-  const { data, error } = await supabase
-    .from('expense_categories')
-    .update({
-      name,
-      color,
-      updated_at: new Date()
-    })
-    .eq('id', id)
-    .select()
-    .single();
-
-  if (error) throw error;
-  return mapExpenseCategory(data);
+  const ref = doc(db, 'expense_categories', id);
+  await updateDoc(ref, {
+    name,
+    color,
+    updatedAt: new Date()
+  });
+  return { id, name, color, updatedAt: new Date() } as any;
 };
 
-// Delete a category
 export const deleteCategory = async (budgetCategory: BudgetCategory): Promise<void> => {
-  // Check if expenses exist for this category and budget
-  const { data: expenses, error: expensesError } = await supabase
-    .from('budget_expenses')
-    .select('id')
-    .eq('category_id', budgetCategory.category.id)
-    .eq('budget_id', budgetCategory.budgetId);
+  // 1. Check for associated expenses in this budget
+  const expQ = query(
+    collection(db, 'budget_expenses'), 
+    where('categoryId', '==', budgetCategory.category.id),
+    where('budgetId', '==', budgetCategory.budgetId)
+  );
+  const expSnap = await getDocs(expQ);
 
-  if (expensesError) throw expensesError;
-
-  if (expenses.length > 0) {
+  if (!expSnap.empty) {
     throw new Error('Cannot delete category with associated expenses');
   }
 
-  const { error: budgetCategoryError } = await supabase
-    .from('budget_categories')
-    .delete()
-    .eq('category_id', budgetCategory.category.id)
-    .eq('budget_id', budgetCategory.budgetId);
+  const batch = writeBatch(db);
 
-  if (budgetCategoryError) throw budgetCategoryError;
+  // 2. Delete the link (budget_category)
+  // We need to find the specific budget_category link ID. 
+  // Optimization: If we passed the ID in the object, use it.
+  const linkRef = doc(db, 'budget_categories', budgetCategory.id);
+  batch.delete(linkRef);
 
-  //Check if category exists in other budgets
-  deleteExpenseCategoryIfNotInOtherBudgets(budgetCategory.category.id);
-};
+  // 3. Check if this category definition is used in OTHER budgets
+  // If not, delete the definition too (Cleanup)
+  const otherUsageQ = query(
+    collection(db, 'budget_categories'), 
+    where('categoryId', '==', budgetCategory.category.id)
+  );
+  const otherUsageSnap = await getDocs(otherUsageQ);
 
-const deleteExpenseCategoryIfNotInOtherBudgets = async (expenseCategoryId: string) => {
-  const { data: otherBudgets, error: otherBudgetsError } = await supabase
-    .from('budget_categories')
-    .select('id')
-    .eq('category_id', expenseCategoryId);
-
-  if (otherBudgetsError) throw otherBudgetsError;
-
-  if (otherBudgets.length < 1) {
-    //Delete category
-    const { error: categoryError } = await supabase
-      .from('expense_categories')
-      .delete()
-      .eq('id', expenseCategoryId);
-
-    if (categoryError) throw categoryError;
+  // If the ONLY usage is the one we are about to delete (size 1), then delete the definition
+  if (otherUsageSnap.size <= 1) {
+    const defRef = doc(db, 'expense_categories', budgetCategory.category.id);
+    batch.delete(defRef);
   }
-}
+
+  await batch.commit();
+};

@@ -1,149 +1,123 @@
-import { supabase } from './supabase';
+import { 
+  collection, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  doc, 
+  getDoc, // Added getDoc
+  getDocs, 
+  query, 
+  where, 
+  writeBatch,
+  Timestamp,
+  documentId // Kept in case you need it for other queries
+} from 'firebase/firestore';
+import { db } from './firebase';
 import { BudgetExpense, BudgetExpenseCreateDTO, BudgetExpenseUpdateDTO } from '../models/Budget';
 import { createFundTransaction } from './fundService';
 
-// Helper function to map database fields to camelCase
-const mapExpense = (data: any): BudgetExpense => ({
-  id: data.id,
-  name: data.name,
-  amount: data.amount,
-  dueDate: data.due_date,
-  categoryId: data.category_id,
-  fundId: data.fund_id,
-  budgetId: data.budget_id,
-  createdAt: data.created_at,
-  updatedAt: data.updated_at,
-  sequenceNumber: data.sequence_number
-});
+const mapExpense = (doc: any): BudgetExpense => {
+  const data = doc.data();
+  return {
+    id: doc.id,
+    name: data.name,
+    amount: data.amount,
+    dueDate: data.dueDate instanceof Timestamp ? data.dueDate.toDate() : data.dueDate ? new Date(data.dueDate) : null,
+    categoryId: data.categoryId,
+    fundId: data.fundId,
+    budgetId: data.budgetId,
+    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
+    updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : new Date(),
+    sequenceNumber: data.sequenceNumber,
+    transactions: [] 
+  };
+};
 
-const mapCreateDTOToDBExpense = (expense: BudgetExpenseCreateDTO): any => ({
-  name: expense.name,
-  amount: expense.amount,
-  due_date: expense.dueDate,
-  category_id: expense.categoryId,
-  fund_id: expense.fundId,
-  budget_id: expense.budgetId,
-  sequence_number: expense.sequenceNumber
-});
-
-const mapUpdateDTOToDBExpense = (expense: BudgetExpenseUpdateDTO): any => ({
-  name: expense.name,
-  amount: expense.amount,
-  due_date: expense.dueDate,
-  fund_id: expense.fundId,
-  sequence_number: expense.sequenceNumber,
-  created_at: new Date(),
-  updated_at: new Date()
-});
-
-// Create a new expense
 export const createExpense = async (expense: BudgetExpenseCreateDTO): Promise<BudgetExpense> => {
-  const { data, error } = await supabase
-    .from('budget_expenses')
-    .insert([mapCreateDTOToDBExpense(expense)])
-    .select()
-    .single();
-
-  if (error) throw error;
-  return mapExpense(data);
+  const docRef = await addDoc(collection(db, 'budget_expenses'), {
+    ...expense,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  });
+  
+  return {
+    id: docRef.id,
+    ...expense,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    transactions: []
+  };
 };
 
 export const createExpenses = async (expenses: BudgetExpenseCreateDTO[]): Promise<BudgetExpense[]> => {
-    const { data, error } = await supabase
-    .from('budget_expenses')
-    .insert(expenses.map(mapCreateDTOToDBExpense))
-    .select();
+  const batch = writeBatch(db);
+  const results: BudgetExpense[] = [];
 
-  if (error) throw error;
-  return data.map(mapExpense);
-};  
+  expenses.forEach(exp => {
+    const ref = doc(collection(db, 'budget_expenses')); // Generate ID locally
+    batch.set(ref, {
+      ...exp,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    results.push({ id: ref.id, ...exp } as any);
+  });
 
-// Update an expense
+  await batch.commit();
+  return results;
+};
+
 export const updateExpense = async (id: string, updates: BudgetExpenseUpdateDTO): Promise<BudgetExpense> => {
-  const expenseUpdates = mapUpdateDTOToDBExpense(updates);
-  const { data, error } = await supabase
-    .from('budget_expenses')
-    .update({
-        ...expenseUpdates,
-        updated_at: new Date()
-    })
-    .eq('id', id)
-    .select()
-    .single();
-
-  if (error) throw error;
-  return mapExpense(data);
+  const ref = doc(db, 'budget_expenses', id);
+  await updateDoc(ref, {
+    ...updates,
+    updatedAt: new Date()
+  });
+  return { id, ...updates } as any;
 };
 
-// Delete an expense
 export const deleteExpense = async (id: string): Promise<void> => {
-  const { error } = await supabase
-    .from('budget_expenses')
-    .delete()
-    .eq('id', id);
-
-  if (error) throw error;
+  await deleteDoc(doc(db, 'budget_expenses', id));
 };
 
-// Get all expenses for a budget
 export const getBudgetExpenses = async (budgetId: string): Promise<BudgetExpense[]> => {
-  const { data, error } = await supabase
-    .from('budget_expenses')
-    .select(`
-      *,
-      transactions(*)
-    `)
-    .eq('budget_id', budgetId);
-
-  if (error) throw error;
-  return (data || []).map(mapExpense);
+  const q = query(collection(db, 'budget_expenses'), where('budgetId', '==', budgetId));
+  const snap = await getDocs(q);
+  return snap.docs.map(mapExpense);
 };
 
-// Add a transaction to an expense
-export const addTransactionToExpense = async (
-  expenseId: string, 
-  transactionId: string
-): Promise<void> => {
-  // First get the expense to check if it's linked to a fund
-  const { data: expense, error: expenseError } = await supabase
-    .from('budget_expenses')
-    .select('*')
-    .eq('id', expenseId)
-    .single();
+export const addTransactionToExpense = async (expenseId: string, transactionId: string): Promise<void> => {
+  // 1. Get the expense to check for fund linkage
+  const expenseRef = doc(db, 'budget_expenses', expenseId);
+  const expenseSnap = await getDoc(expenseRef); // Optimized: Use getDoc instead of query
+  
+  if (!expenseSnap.exists()) throw new Error("Expense not found");
+  const expenseData = expenseSnap.data();
 
-  if (expenseError) throw expenseError;
+  // 2. Update Transaction
+  const transRef = doc(db, 'transactions', transactionId);
+  await updateDoc(transRef, { expenseId: expenseId });
 
-  // Update the transaction with the expense ID
-  const { error: updateError } = await supabase
-    .from('transactions')
-    .update({ expense_id: expenseId })
-    .eq('id', transactionId);
-
-  if (updateError) throw updateError;
-
-  // If the expense is linked to a fund, create a fund transaction
-  if (expense.fund_id) {
-    await createFundTransaction(expense.fund_id, transactionId, 'deposit');
+  // 3. Handle Fund Logic
+  if (expenseData.fundId) {
+    await createFundTransaction(expenseData.fundId, transactionId, 'deposit');
   }
 };
 
-// Batch update expenses
 export const updateExpenses = async (expenses: BudgetExpense[]): Promise<BudgetExpense[]> => {
-    const upsertData = expenses.map(expense => ({
-        id: expense.id,
-        name: expense.name,
-        amount: expense.amount,
-        due_date: expense.dueDate,
-        fund_id: expense.fundId,
-        updated_at: new Date(),
-        sequence_number: expense.sequenceNumber
-    }));
-    
-    const { data, error } = await supabase
-        .from('budget_expenses')
-        .upsert(upsertData)
-        .select();
-
-  if (error) throw error;
-  return (data || []).map(mapExpense);
-}; 
+  const batch = writeBatch(db);
+  expenses.forEach(exp => {
+    const ref = doc(db, 'budget_expenses', exp.id);
+    batch.update(ref, {
+      name: exp.name,
+      amount: exp.amount,
+      dueDate: exp.dueDate,
+      fundId: exp.fundId,
+      updatedAt: new Date(),
+      sequenceNumber: exp.sequenceNumber
+    });
+  });
+  
+  await batch.commit();
+  return expenses;
+};
