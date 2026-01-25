@@ -14,7 +14,7 @@ A modern zero-based budgeting application that helps you give every dollar a pur
 - React
 - TypeScript
 - Material-UI
-- Supabase (Backend & Authentication)
+- Firebase (Backend & Authentication)
 - Vite
 
 ## Setup
