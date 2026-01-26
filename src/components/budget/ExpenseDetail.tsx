@@ -1,3 +1,4 @@
+// ... imports ...
 import React, { useState } from 'react';
 import { 
   Box, 
@@ -12,14 +13,12 @@ import {
   Divider,
   SwipeableDrawer,
   styled,
-  useTheme,
   ListItemSecondaryAction,
-  Chip,
   Icon
 } from '@mui/material';
-import { Close, Delete, AccountBalance, CallSplit, CallSplitTwoTone } from '@mui/icons-material';
+import { Close, Delete, CallSplit, CallSplitTwoTone } from '@mui/icons-material';
 import { Transaction, TransactionSplitDTO } from '../../models/Transaction';
-import { Budget, BudgetExpense, ExpenseCategory } from '../../models/Budget';
+import { BudgetExpense, ExpenseCategory } from '../../models/Budget';
 import { createTransaction, deleteTransaction, splitTransaction } from '../../services/transactionService';
 import { updateExpense } from '../../services/expenseService';
 import { createFundTransaction } from '../../services/fundService';
@@ -63,7 +62,6 @@ function ExpenseDetail({
   const { user } = useAuth();
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
 
-  // const totalSpent = (expense.transactions || []).reduce((sum, t) => sum + t.amount, 0);
   const totalSpent = (expense.transactions || []).reduce((sum, t) => sum + t.amount, 0) +
   (expense.splitTransactions || []).reduce((sum, t) => sum + t.splitAmount, 0);
   const remaining = expense.amount - totalSpent;
@@ -86,7 +84,7 @@ function ExpenseDetail({
         );
       }
 
-      handleTransactionDeleted(newTransaction.id || ''); // This will trigger a refresh
+      handleTransactionDeleted(newTransaction.id || '');
       setTransactionDialogOpen(false);
     } catch (error) {
       console.error('Error adding transaction:', error);
@@ -104,8 +102,19 @@ function ExpenseDetail({
 
   const handleFundChange = async (fundId: string | null) => {
     try {
-      const updatedExpense = await updateExpense(expense.id, { ...expense, fundId });
-      handleExpenseUpdated(updatedExpense);
+      const partialUpdate = await updateExpense(expense.id, { 
+        name: expense.name, 
+        amount: expense.amount, 
+        dueDate: expense.dueDate,
+        sequenceNumber: expense.sequenceNumber,
+        fundId 
+      });
+
+      // Manually merge to ensure we don't lose transactions/splitTransactions
+      handleExpenseUpdated({ 
+        ...expense, 
+        ...partialUpdate 
+      });
     } catch (error) {
       console.error('Error updating expense fund:', error);
     }
@@ -114,7 +123,7 @@ function ExpenseDetail({
   const handleSplitTransaction = async (splitDTO: TransactionSplitDTO) => {
     try {
       await splitTransaction(splitDTO);
-      handleTransactionDeleted(splitDTO.parentTransactionId); // This will trigger a refresh
+      handleTransactionDeleted(splitDTO.parentTransactionId);
       setSelectedTransaction(null);
     } catch (error) {
       console.error('Error splitting transaction:', error);

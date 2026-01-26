@@ -172,10 +172,14 @@ function BudgetCategories({
       const existingExpense = currentBudget.expenses?.find(e => e.id === expenseId);
       if (!existingExpense) return;
 
+      // The service returns a partial object (e.g., { id, name, amount })
+      // It does NOT return the nested 'transactions' array.
       const updated = await updateExpense(expenseId, updates);
 
       const updatedExpenses = currentBudget.expenses?.map(e => 
-        e.id === updated.id ? updated : e
+        // FIX for BUG-001: Merge existing expense (e) with updates.
+        // This preserves 'transactions' and other nested fields not returned by updateExpense.
+        e.id === updated.id ? { ...e, ...updated } : e
       ) || [];
 
       handleExpensesChange(updatedExpenses);
@@ -311,7 +315,6 @@ function BudgetCategories({
           onClose={() => setEditDialog({ open: false, category: null })}
           onCategorySaved={handleCategorySaved}
           initialCategory={editDialog.category}
-          currentBudget={currentBudget}
         />
       )}
 

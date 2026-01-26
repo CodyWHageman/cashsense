@@ -13,7 +13,7 @@ export default defineConfig({
         manualChunks: {
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
           'mui-vendor': ['@mui/material', '@mui/icons-material'],
-          'supabase-vendor': ['@supabase/supabase-js'],
+          'firebase-vendor': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/analytics'],
           'chart-vendor': ['@nivo/pie']
         }
       }

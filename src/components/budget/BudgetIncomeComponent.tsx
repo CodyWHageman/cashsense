@@ -99,15 +99,22 @@ function BudgetIncomeComponent({
     if (!currentBudget) return;
 
     try {
-      let updatedIncome;
       if ('id' in editDialog.income && editDialog.income.id) {
-        // Update existing income
-        updatedIncome = await updateIncome(editDialog.income.id, {
+        const existingIncome = currentBudget.incomes?.find(i => i.id === editDialog.income!.id);
+        if (!existingIncome) return;
+
+        const partialUpdate = await updateIncome(editDialog.income.id, {
           ...editDialog.income,
           updatedAt: new Date()
         });
+
+        const mergedIncome: BudgetIncome = {
+          ...existingIncome,
+          ...partialUpdate
+        };
+
+        handleIncomeUpdated(mergedIncome);
       } else {
-        // Create new income
         const newIncome = {
           name: editDialog.income.name,
           amount: editDialog.income.amount || 0,
@@ -117,10 +124,10 @@ function BudgetIncomeComponent({
           createdAt: new Date(),
           updatedAt: new Date()
         };
-        updatedIncome = await createIncome(newIncome);
+        const createdIncome = await createIncome(newIncome);
+        handleIncomeUpdated(createdIncome);
       }
 
-      handleIncomeUpdated(updatedIncome);
       setEditDialog({ open: false, income: null });
     } catch (error) {
       console.error('Error saving income:', error);
@@ -143,7 +150,7 @@ function BudgetIncomeComponent({
   
   return (
     <Paper className="category-section">
-      {/* Header Row */}
+       {/* ... existing JSX content ... */}
       <Box sx={{
         display: 'grid',
         gridTemplateColumns: '1fr 120px 120px 40px',
@@ -153,7 +160,6 @@ function BudgetIncomeComponent({
         borderBottom: 1,
         borderColor: 'divider'
       }}>
-        {/* Title and Expand Icon */}
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
           <ExpandMore
             onClick={handleToggle}
@@ -170,14 +176,13 @@ function BudgetIncomeComponent({
           </Typography>
         </Box>
 
-        {/* Column Headers */}
         <Typography variant="body2" sx={{ textAlign: 'right', color: 'text.secondary' }}>
           Planned
         </Typography>
         <Typography variant="body2" sx={{ textAlign: 'right', color: 'text.secondary' }}>
           Received
         </Typography>
-        <Box /> {/* Spacer for menu button column */}
+        <Box /> 
       </Box>
 
       <Collapse in={expanded}>
@@ -235,7 +240,6 @@ function BudgetIncomeComponent({
             </ListItem>
           ))}
 
-          {/* Combined Total and Add Income row */}
           <ListItem
             sx={{
               display: 'grid',
@@ -276,12 +280,11 @@ function BudgetIncomeComponent({
             >
               ${totalReceived.toFixed(2)}
             </Typography>
-            <Box /> {/* Spacer for alignment */}
+            <Box /> 
           </ListItem>
         </List>
       </Collapse>
 
-      {/* Income Menu */}
       <Menu
         anchorEl={menuAnchor.element}
         open={Boolean(menuAnchor.element)}
@@ -314,7 +317,6 @@ function BudgetIncomeComponent({
         </MenuItem>
       </Menu>
 
-      {/* Edit Dialog */}
       <Dialog 
         open={editDialog.open} 
         onClose={() => setEditDialog({ open: false, income: null })}
@@ -365,7 +367,6 @@ function BudgetIncomeComponent({
         </DialogActions>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
       <Dialog
         open={deleteConfirmation.open}
         onClose={() => setDeleteConfirmation({ open: false, income: null })}
@@ -400,4 +401,4 @@ function BudgetIncomeComponent({
   );
 }
 
-export default BudgetIncomeComponent; 
+export default BudgetIncomeComponent;
