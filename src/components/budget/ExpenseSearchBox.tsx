@@ -29,21 +29,25 @@ export function ExpenseSearchBox({
           size={size}
         />
       )}
-      renderOption={(props, option) => (
-        <Box component="li" {...props}>
-          <Box sx={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            width: '100%',
-            alignItems: 'center'
-          }}>
-            <span>{option.name}</span>
-            <span style={{ color: 'text.secondary' }}>
-              ${option.amount.toFixed(2)}
-            </span>
+      renderOption={(props, option) => {
+        const { key, ...otherProps } = props;
+
+        return (
+          <Box component="li" key={key} {...otherProps}>
+            <Box sx={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              width: '100%',
+              alignItems: 'center'
+            }}>
+              <span>{option.name}</span>
+              <span style={{ color: 'text.secondary' }}>
+                ${option.amount.toFixed(2)}
+              </span>
+            </Box>
           </Box>
-        </Box>
-      )}
+        )
+      }}
       fullWidth={fullWidth}
       blurOnSelect
     />

@@ -95,9 +95,28 @@ export const updateExpense = async (id: string, updates: BudgetExpenseUpdateDTO)
 };
 
 export const deleteExpense = async (id: string): Promise<void> => {
-  await deleteDoc(doc(db, 'budget_expenses', id));
-};
+  const batch = writeBatch(db);
 
+  // 1. Delete the expense document
+  const expenseRef = doc(db, 'budget_expenses', id);
+  batch.delete(expenseRef);
+
+  // 2. Delete linked standard transactions
+  const transQ = query(collection(db, 'transactions'), where('expenseId', '==', id));
+  const transSnap = await getDocs(transQ);
+  transSnap.forEach(doc => {
+    batch.delete(doc.ref);
+  });
+
+  // 3. Delete linked split transactions
+  const splitQ = query(collection(db, 'split_transactions'), where('expenseId', '==', id));
+  const splitSnap = await getDocs(splitQ);
+  splitSnap.forEach(doc => {
+    batch.delete(doc.ref);
+  });
+
+  await batch.commit();
+};
 export const getBudgetExpenses = async (budgetId: string): Promise<BudgetExpense[]> => {
   const q = query(collection(db, 'budget_expenses'), where('budgetId', '==', budgetId));
   const snap = await getDocs(q);
