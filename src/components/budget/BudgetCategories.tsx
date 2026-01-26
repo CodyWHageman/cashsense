@@ -128,13 +128,20 @@ function BudgetCategories({
 
   const handleExpenseReorder = async (categoryId: string, reorderedExpenses: BudgetExpense[]) => {
     try {
-      // Update local state
-      const updatedExpenses = currentBudget?.expenses?.map(exp => 
-        reorderedExpenses.find(re => re.id === exp.id) || exp
-      );
-      handleExpensesChange(updatedExpenses || []);
+      if (!currentBudget?.expenses) return;
 
-      // Save to database
+      // 1. Remove all expenses belonging to this category from the current list
+      const otherExpenses = currentBudget.expenses.filter(e => e.categoryId !== categoryId);
+
+      // 2. Append the reordered expenses. 
+      // Since rendering filters by categoryId, the relative order within 'reorderedExpenses' 
+      // is preserved and will be reflected in the UI immediately.
+      const updatedExpenses = [...otherExpenses, ...reorderedExpenses];
+
+      // 3. Update local state
+      handleExpensesChange(updatedExpenses);
+
+      // 4. Save to database
       await sequenceService.updateExpenseSequence(reorderedExpenses);
     } catch (error) {
       console.error('Error updating expense sequence:', error);
