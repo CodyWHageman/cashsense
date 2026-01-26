@@ -173,17 +173,27 @@ export const splitTransaction = async (transactionSplit: TransactionSplitDTO): P
   return await firestoreRunTransaction(db, async (transaction) => {
     const parentRef = doc(db, 'transactions', transactionSplit.parentTransactionId);
     
+    // 1. READ FIRST: Firestore requires reads to happen before ANY writes
+    const parentSnap = await transaction.get(parentRef);
+    if (!parentSnap.exists()) {
+      throw new Error("Parent transaction not found");
+    }
+
+    // 2. PREPARE DATA
     const createdSplits: SplitTransaction[] = [];
-    
+    const timestamp = new Date(); // Use consistent timestamp for all operations
+
+    // 3. EXECUTE WRITES (Splits)
     for (const split of transactionSplit.splits) {
       const splitRef = doc(collection(db, 'split_transactions'));
       const splitData = sanitizeData({
         parentTransactionId: transactionSplit.parentTransactionId,
         splitAmount: split.amount,
         expenseId: split.expenseId,
-        createdAt: new Date(),
-        updatedAt: new Date()
+        createdAt: timestamp,
+        updatedAt: timestamp
       });
+      
       transaction.set(splitRef, splitData);
       
       createdSplits.push({
@@ -193,14 +203,41 @@ export const splitTransaction = async (transactionSplit: TransactionSplitDTO): P
       });
     }
 
-    transaction.update(parentRef, {
+    // 4. EXECUTE WRITES (Update Parent)
+    const parentUpdates = {
       expenseId: null,
       incomeId: null,
       isSplit: true,
-      updatedAt: new Date()
-    });
+      updatedAt: timestamp
+    };
 
-    const parentSnap = await transaction.get(parentRef);
-    return mapTransaction(parentSnap, createdSplits);
+    transaction.update(parentRef, parentUpdates);
+
+    // 5. RETURN RESULT
+    // We cannot read 'parentRef' again to get the updated state. 
+    // We must manually merge the snapshot data with our updates to return the correct object.
+    const initialParentData = parentSnap.data();
+    
+    // Helper to ensure dates are Date objects, not Timestamps
+    const toDate = (d: any) => d instanceof Timestamp ? d.toDate() : new Date(d);
+
+    const mergedParent: ParentTransaction = {
+      id: parentSnap.id,
+      hashId: initialParentData.hashId,
+      amount: initialParentData.amount,
+      description: initialParentData.description,
+      date: toDate(initialParentData.date),
+      createdAt: toDate(initialParentData.createdAt),
+      // Apply the updates we just made
+      expenseId: undefined, 
+      incomeId: undefined,
+      isSplit: true,
+      updatedAt: timestamp
+    };
+
+    return {
+      ...mergedParent,
+      splits: createdSplits
+    };
   });
 };

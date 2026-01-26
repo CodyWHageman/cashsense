@@ -24,8 +24,8 @@ import {
   BudgetCreateDTO 
 } from '../models/Budget';
 import { getDatabaseMonth } from '../utils/dateUtils';
-import { Transaction } from '../models/Transaction';
-import { mapTransaction } from './transactionService';
+import { ParentTransaction, SplitTransaction, Transaction } from '../models/Transaction';
+import { mapSplitTransaction, mapTransaction } from './transactionService';
 
 // Helper: Remove undefined keys
 const sanitizeData = (data: any) => {
@@ -66,7 +66,7 @@ const mapBudgetCategory = (doc: any, category?: ExpenseCategory): BudgetCategory
   };
 };
 
-const mapExpense = (doc: any, transactions: Transaction[] = []): BudgetExpense => {
+const mapExpense = (doc: any, transactions: Transaction[] = [], splitTransactions: SplitTransaction[] = []): BudgetExpense => {
   const data = doc.data();
   return {
     id: doc.id,
@@ -80,7 +80,7 @@ const mapExpense = (doc: any, transactions: Transaction[] = []): BudgetExpense =
     updatedAt: toDate(data.updatedAt) || new Date(),
     sequenceNumber: data.sequenceNumber,
     transactions: transactions,
-    splitTransactions: []
+    splitTransactions: splitTransactions
   };
 };
 
@@ -138,90 +138,138 @@ export const getBudgetByMonthAndYear = async (month: number, year: number, userI
     const budgetDoc = budgetSnap.docs[0];
     const budgetId = budgetDoc.id;
 
-    // 1. Fetch all direct sub-collections in parallel
+    // 1. Fetch Basic Budget Data
     const [expensesSnap, incomesSnap, budgetCatsSnap] = await Promise.all([
       getDocs(query(collection(db, 'budget_expenses'), where('budgetId', '==', budgetId))),
       getDocs(query(collection(db, 'budget_incomes'), where('budgetId', '==', budgetId))),
       getDocs(query(collection(db, 'budget_categories'), where('budgetId', '==', budgetId)))
     ]);
 
-    // 2. Prepare Parallel Fetches for Dependencies (Categories & Transactions)
-    
-    // Task A: Fetch Expense Category Definitions
+    // 2. Map Categories
     const categoryIds = budgetCatsSnap.docs.map(d => d.data().categoryId);
-    const categoriesFetchPromise = (async () => {
-      const catMap: Record<string, ExpenseCategory> = {};
-      if (categoryIds.length === 0) return catMap;
+    let expenseCategoriesMap: Record<string, ExpenseCategory> = {};
 
+    if (categoryIds.length > 0) {
       const chunks = [];
       const chunkSize = 30;
       for (let i = 0; i < categoryIds.length; i += chunkSize) {
-        chunks.push(categoryIds.slice(i, i + chunkSize));
+          chunks.push(categoryIds.slice(i, i + chunkSize));
       }
 
-      const fetchedChunks = await Promise.all(
+      const fetchedCategories = await Promise.all(
         chunks.map(chunk => getDocs(query(collection(db, 'expense_categories'), where(documentId(), 'in', chunk))))
       );
-
-      fetchedChunks.forEach(snap => {
+      
+      fetchedCategories.forEach(snap => {
         snap.forEach(doc => {
-          catMap[doc.id] = mapExpenseCategory(doc);
+          expenseCategoriesMap[doc.id] = mapExpenseCategory(doc);
         });
       });
-      return catMap;
-    })();
+    }
 
-    // Task B: Fetch Transactions for Expenses and Incomes
-    const expenseIds = expensesSnap.docs.map(d => d.id);
-    const incomeIds = incomesSnap.docs.map(d => d.id);
-    
-    const transactionsFetchPromise = (async () => {
-      const transMap: Record<string, Transaction[]> = {};
-      
-      const fetchForField = async (field: 'expenseId' | 'incomeId', ids: string[]) => {
-        if (ids.length === 0) return;
-        const chunks = [];
-        for (let i = 0; i < ids.length; i += 30) {
-          chunks.push(ids.slice(i, i + 30));
-        }
-        
-        const results = await Promise.all(
-          chunks.map(chunk => getDocs(query(collection(db, 'transactions'), where(field, 'in', chunk))))
-        );
-
-        results.forEach(snap => {
-          snap.forEach(doc => {
-            const t = mapTransaction(doc); 
-            const linkId = field === 'expenseId' ? t.expenseId : t.incomeId;
-            if (linkId) {
-              if (!transMap[linkId]) transMap[linkId] = [];
-              transMap[linkId].push(t);
-            }
-          });
-        });
-      };
-
-      await Promise.all([
-        fetchForField('expenseId', expenseIds),
-        fetchForField('incomeId', incomeIds)
-      ]);
-      
-      return transMap;
-    })();
-
-    // 3. Await all dependency fetches
-    const [expenseCategoriesMap, transactionMap] = await Promise.all([
-      categoriesFetchPromise,
-      transactionsFetchPromise
-    ]);
-
-    // 4. Assemble and Map Final Objects
     const categories = budgetCatsSnap.docs.map(doc => 
       mapBudgetCategory(doc, expenseCategoriesMap[doc.data().categoryId])
     );
     categories.sort((a, b) => a.sequenceNumber - b.sequenceNumber);
 
-    const expenses = expensesSnap.docs.map(doc => mapExpense(doc, transactionMap[doc.id] || []));
+    const expenseIds = expensesSnap.docs.map(d => d.id);
+    const incomeIds = incomesSnap.docs.map(d => d.id);
+    
+    // 3. Fetch Standard Transactions (Direct Links)
+    let transactionMap: Record<string, Transaction[]> = {};
+
+    const fetchTransactionsForLinks = async (field: 'expenseId' | 'incomeId', ids: string[]) => {
+      if (ids.length === 0) return;
+      const chunks = [];
+      for (let i = 0; i < ids.length; i += 30) {
+        chunks.push(ids.slice(i, i + 30));
+      }
+      
+      const results = await Promise.all(
+        chunks.map(chunk => getDocs(query(collection(db, 'transactions'), where(field, 'in', chunk))))
+      );
+
+      results.forEach(snap => {
+        snap.forEach(doc => {
+          const t = mapTransaction(doc); 
+          const linkId = field === 'expenseId' ? t.expenseId : t.incomeId;
+          if (linkId) {
+            if (!transactionMap[linkId]) transactionMap[linkId] = [];
+            transactionMap[linkId].push(t);
+          }
+        });
+      });
+    };
+
+    // 4. Fetch Split Transactions
+    let splitTransactionMap: Record<string, SplitTransaction[]> = {};
+    const fetchSplitTransactions = async (ids: string[]) => {
+      if (ids.length === 0) return;
+      
+      // A. Fetch the split records
+      const splitDocs: any[] = [];
+      const chunks = [];
+      for (let i = 0; i < ids.length; i += 30) {
+        chunks.push(ids.slice(i, i + 30));
+      }
+
+      await Promise.all(
+        chunks.map(async chunk => {
+          const q = query(collection(db, 'split_transactions'), where('expenseId', 'in', chunk));
+          const snap = await getDocs(q);
+          snap.forEach(d => splitDocs.push(d));
+        })
+      );
+
+      if (splitDocs.length === 0) return;
+
+      // B. Fetch the parent transactions for these splits
+      const parentIds = Array.from(new Set(splitDocs.map(d => d.data().parentTransactionId))).filter(id => !!id);
+      const parentMap: Record<string, ParentTransaction> = {};
+      
+      const parentChunks = [];
+      for (let i = 0; i < parentIds.length; i += 30) {
+        parentChunks.push(parentIds.slice(i, i + 30));
+      }
+
+      await Promise.all(
+        parentChunks.map(async chunk => {
+          const q = query(collection(db, 'transactions'), where(documentId(), 'in', chunk));
+          const snap = await getDocs(q);
+          snap.forEach(d => {
+            parentMap[d.id] = mapTransaction(d);
+          });
+        })
+      );
+
+      // C. Map splits and attach parents
+      splitDocs.forEach(d => {
+        const data = d.data();
+        const parent = parentMap[data.parentTransactionId];
+        if (parent) {
+          const split = mapSplitTransaction(d, parent);
+          if (!splitTransactionMap[split.expenseId]) {
+            splitTransactionMap[split.expenseId] = [];
+          }
+          splitTransactionMap[split.expenseId].push(split);
+        }
+      });
+    };
+
+    await Promise.all([
+      fetchTransactionsForLinks('expenseId', expenseIds),
+      fetchTransactionsForLinks('incomeId', incomeIds),
+      fetchSplitTransactions(expenseIds) // Add this call
+    ]);
+
+    // 5. Map Final Objects
+    const expenses = expensesSnap.docs.map(doc => 
+      mapExpense(
+        doc, 
+        transactionMap[doc.id] || [], 
+        splitTransactionMap[doc.id] || [] // Pass splits here
+      )
+    );
     const incomes = incomesSnap.docs.map(doc => mapIncome(doc, transactionMap[doc.id] || []));
 
     expenses.sort((a, b) => a.sequenceNumber - b.sequenceNumber);
