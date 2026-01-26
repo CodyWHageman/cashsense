@@ -13,7 +13,6 @@ import {
 import { db } from './firebase';
 import { BudgetIncome, BudgetIncomeCreateDTO } from '../models/Budget';
 
-// Helper: Remove undefined keys
 const sanitizeData = (data: any) => {
   return Object.entries(data).reduce((acc, [key, value]) => {
     if (value === undefined) return acc;
@@ -72,15 +71,19 @@ export const getBudgetIncomes = async (budgetId: string): Promise<BudgetIncome[]
   return snap.docs.map(mapIncome);
 };
 
-export const updateIncome = async (id: string, updates: Partial<BudgetIncome>): Promise<BudgetIncome> => {
+export const updateIncome = async (id: string, updates: Partial<BudgetIncome>): Promise<Partial<BudgetIncome>> => {
   const ref = doc(db, 'budget_incomes', id);
-  const cleanUpdates = sanitizeData(updates);
+  const { id: _id, transactions: _transactions, ...rest } = updates;
   
-  await updateDoc(ref, {
+  const cleanUpdates = sanitizeData(rest);
+  const timestampedUpdates = {
     ...cleanUpdates,
     updatedAt: new Date()
-  });
-  return { id, ...updates } as any;
+  };
+  
+  await updateDoc(ref, timestampedUpdates);
+  
+  return { id, ...timestampedUpdates };
 };
 
 export const deleteIncome = async (id: string): Promise<void> => {
@@ -95,7 +98,7 @@ export const updateIncomes = async (incomes: BudgetIncome[]): Promise<BudgetInco
       name: inc.name,
       amount: inc.amount,
       frequency: inc.frequency,
-      expectedDate: inc.expectedDate ?? null, // Ensure null if undefined
+      expectedDate: inc.expectedDate ?? null,
       updatedAt: new Date()
     });
   });

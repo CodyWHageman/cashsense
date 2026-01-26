@@ -22,8 +22,7 @@ A modern zero-based budgeting application that helps you give every dollar a pur
 ### Prerequisites
 
 - Node.js (v14 or higher)
-- npm or yarn
-- A Supabase account
+- npm or yar
 
 ### Installation
 
@@ -42,25 +41,14 @@ yarn install
 
 3. Create a `.env` file in the root directory with your Supabase credentials:
 ```
-VITE_SUPABASE_URL=your_supabase_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_FIREBASE_API_KEY=
+VITE_FIREBASE_AUTH_DOMAIN=
+VITE_FIREBASE_PROJECT_ID=
+VITE_FIREBASE_STORAGE_BUCKET=
+VITE_FIREBASE_MESSAGING_SENDER_ID=
+VITE_FIREBASE_APP_ID=
+VITE_FIREBASE_MEASUREMENT_ID=
 ```
-
-### Setting up Supabase
-
-1. Create a new project in Supabase
-2. Go to the SQL editor in your Supabase dashboard
-3. Copy the contents of `schema.sql` and run it in the SQL editor
-4. This will create all necessary tables and set up Row Level Security (RLS) policies
-
-The schema includes the following tables:
-- `budgets`: Stores monthly budgets
-- `expense_categories`: Stores expense categories
-- `budget_expenses`: Stores budget expenses
-- `budget_incomes`: Stores budget incomes
-- `transactions`: Stores actual transactions
-- `funds`: Stores savings funds
-- `fund_transactions`: Stores fund transactions
 
 ### Running the App
 
@@ -142,11 +130,7 @@ The app will be available at `http://localhost:5173`
 
 ## Security
 
-The database uses Row Level Security (RLS) to ensure users can only access their own data. Each table has policies that:
-- Allow users to view only their own data
-- Allow users to create data only for themselves
-- Allow users to update only their own data
-- Allow users to delete only their own data
+
 
 ## Contributing
 

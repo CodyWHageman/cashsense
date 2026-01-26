@@ -9,8 +9,7 @@ import {
   query, 
   where, 
   writeBatch,
-  Timestamp,
-  documentId 
+  Timestamp 
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { BudgetExpense, BudgetExpenseCreateDTO, BudgetExpenseUpdateDTO } from '../models/Budget';
@@ -19,8 +18,6 @@ import { createFundTransaction } from './fundService';
 // --- Helper: Remove undefined keys ---
 const sanitizeData = (data: any) => {
   return Object.entries(data).reduce((acc, [key, value]) => {
-    // If value is explicitly undefined, skip it. 
-    // If it's null, we keep it (Firestore allows null).
     if (value === undefined) {
       return acc;
     }
@@ -47,7 +44,6 @@ const mapExpense = (doc: any): BudgetExpense => {
 };
 
 export const createExpense = async (expense: BudgetExpenseCreateDTO): Promise<BudgetExpense> => {
-  // Sanitize to ensure no 'undefined' fields (like fundId) are passed
   const cleanExpense = sanitizeData(expense);
   
   const docRef = await addDoc(collection(db, 'budget_expenses'), {
@@ -71,7 +67,7 @@ export const createExpenses = async (expenses: BudgetExpenseCreateDTO[]): Promis
 
   expenses.forEach(exp => {
     const cleanExp = sanitizeData(exp);
-    const ref = doc(collection(db, 'budget_expenses')); // Generate ID locally
+    const ref = doc(collection(db, 'budget_expenses'));
     batch.set(ref, {
       ...cleanExp,
       createdAt: new Date(),
@@ -84,23 +80,43 @@ export const createExpenses = async (expenses: BudgetExpenseCreateDTO[]): Promis
   return results;
 };
 
-export const updateExpense = async (id: string, updates: BudgetExpenseUpdateDTO): Promise<BudgetExpense> => {
+export const updateExpense = async (id: string, updates: BudgetExpenseUpdateDTO): Promise<Partial<BudgetExpense>> => {
   const ref = doc(db, 'budget_expenses', id);
   
-  // Sanitize updates!
   const cleanUpdates = sanitizeData(updates);
-
-  await updateDoc(ref, {
+  const timestampedUpdates = {
     ...cleanUpdates,
     updatedAt: new Date()
-  });
-  return { id, ...updates } as any;
+  };
+
+  await updateDoc(ref, timestampedUpdates);
+  
+  return { id, ...timestampedUpdates };
 };
 
 export const deleteExpense = async (id: string): Promise<void> => {
-  await deleteDoc(doc(db, 'budget_expenses', id));
-};
+  const batch = writeBatch(db);
 
+  // 1. Delete the expense document
+  const expenseRef = doc(db, 'budget_expenses', id);
+  batch.delete(expenseRef);
+
+  // 2. Delete linked standard transactions
+  const transQ = query(collection(db, 'transactions'), where('expenseId', '==', id));
+  const transSnap = await getDocs(transQ);
+  transSnap.forEach(doc => {
+    batch.delete(doc.ref);
+  });
+
+  // 3. Delete linked split transactions
+  const splitQ = query(collection(db, 'split_transactions'), where('expenseId', '==', id));
+  const splitSnap = await getDocs(splitQ);
+  splitSnap.forEach(doc => {
+    batch.delete(doc.ref);
+  });
+
+  await batch.commit();
+};
 export const getBudgetExpenses = async (budgetId: string): Promise<BudgetExpense[]> => {
   const q = query(collection(db, 'budget_expenses'), where('budgetId', '==', budgetId));
   const snap = await getDocs(q);
@@ -108,18 +124,15 @@ export const getBudgetExpenses = async (budgetId: string): Promise<BudgetExpense
 };
 
 export const addTransactionToExpense = async (expenseId: string, transactionId: string): Promise<void> => {
-  // 1. Get the expense to check for fund linkage
   const expenseRef = doc(db, 'budget_expenses', expenseId);
   const expenseSnap = await getDoc(expenseRef);
   
   if (!expenseSnap.exists()) throw new Error("Expense not found");
   const expenseData = expenseSnap.data();
 
-  // 2. Update Transaction
   const transRef = doc(db, 'transactions', transactionId);
   await updateDoc(transRef, { expenseId: expenseId });
 
-  // 3. Handle Fund Logic
   if (expenseData.fundId) {
     await createFundTransaction(expenseData.fundId, transactionId, 'deposit');
   }
@@ -130,12 +143,11 @@ export const updateExpenses = async (expenses: BudgetExpense[]): Promise<BudgetE
   expenses.forEach(exp => {
     const ref = doc(db, 'budget_expenses', exp.id);
     
-    // Explicitly select fields to update to avoid passing accidental undefineds from the object
     batch.update(ref, {
       name: exp.name,
       amount: exp.amount,
       dueDate: exp.dueDate,
-      fundId: exp.fundId ?? null, // Ensure null if undefined
+      fundId: exp.fundId ?? null,
       updatedAt: new Date(),
       sequenceNumber: exp.sequenceNumber
     });
