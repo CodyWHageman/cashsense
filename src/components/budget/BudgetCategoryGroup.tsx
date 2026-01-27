@@ -10,12 +10,14 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
+  SxProps,
+  Theme
 } from '@mui/material';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { BudgetCategory, BudgetExpense, BudgetExpenseCreateDTO, BudgetExpenseUpdateDTO } from '../../models/Budget';
 import { ExpandMore, Add, SavingsTwoTone, Delete } from '@mui/icons-material';
-import { sequenceService } from '../../services/sequenceService';
+import { useResponsive } from '../../hooks/useResponsive';
 
 interface BudgetCategoryGroupProps {
   budgetCategory: BudgetCategory;
@@ -43,6 +45,7 @@ const BudgetCategoryGroup: React.FC<BudgetCategoryGroupProps> = ({
   onExpenseReorder,
   categoryMenuButton,
 }) => {
+  const { isSmallScreen } = useResponsive();
   const [expanded, setExpanded] = useState(true);
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [isEditingName, setIsEditingName] = useState(false);
@@ -71,7 +74,6 @@ const BudgetCategoryGroup: React.FC<BudgetCategoryGroupProps> = ({
   const handleSave = async () => {
     if (isAddingNewExpense) {
       if (!tempName.trim()) {
-        // If no name provided for new expense, cancel the add
         cancelAdd();
         return;
       }
@@ -86,7 +88,6 @@ const BudgetCategoryGroup: React.FC<BudgetCategoryGroupProps> = ({
           sequenceNumber: 0
         });
         
-        // Reset states after successful add
         setIsAddingNewExpense(false);
         setTempName('');
         setTempAmount('');
@@ -98,7 +99,6 @@ const BudgetCategoryGroup: React.FC<BudgetCategoryGroupProps> = ({
       return;
     }
 
-    // Handle existing expense update
     if (!editingExpenseId || !onExpenseUpdate) return;
     
     const expense = expenses.find(e => e.id === editingExpenseId);
@@ -113,7 +113,6 @@ const BudgetCategoryGroup: React.FC<BudgetCategoryGroupProps> = ({
         sequenceNumber: expense.sequenceNumber
       });
       
-      // Reset states
       setEditingExpenseId(null);
       setIsEditingName(false);
       setIsEditingAmount(false);
@@ -165,13 +164,11 @@ const BudgetCategoryGroup: React.FC<BudgetCategoryGroupProps> = ({
     const [reorderedItem] = items.splice(result.source.index, 1);
     items.splice(result.destination.index, 0, reorderedItem);
 
-    // Update sequence numbers
     const updatedExpenses = items.map((expense, index) => ({
       ...expense,
       sequenceNumber: index
     }));
 
-    // Call the parent handler to update the database
     await onExpenseReorder(updatedExpenses);
   };
 
@@ -199,24 +196,34 @@ const BudgetCategoryGroup: React.FC<BudgetCategoryGroupProps> = ({
     setTempAmount('');
   };
 
+  // Define layout styles for consistency
+  const gridLayoutStyles: SxProps<Theme> = {
+    display: isSmallScreen ? 'flex' : 'grid',
+    flexDirection: isSmallScreen ? 'column' : 'row',
+    gridTemplateColumns: isSmallScreen ? undefined : '1fr 120px 120px 40px',
+    gap: 1,
+    alignItems: 'center',
+    p: isSmallScreen ? 2 : 1, // Larger padding for touch
+  };
+
   return (
     <Paper className="category-section" sx={{ mb: 1 }}>
-      {/* Header Row */}
+      {/* HEADER ROW */}
       <Box sx={{
-        display: 'grid',
-        gridTemplateColumns: '1fr 120px 120px 40px',
-        gap: 1,
-        alignItems: 'center',
-        p: 1,
+        ...gridLayoutStyles,
+        // FIX: Force 'row' layout for the header so the Title and Menu stay side-by-side
+        flexDirection: isSmallScreen ? 'row' : undefined,
+        justifyContent: isSmallScreen ? 'space-between' : undefined,
         borderBottom: 1,
-        borderColor: 'divider'
+        borderColor: 'divider',
+        py: 1
       }}>
         {/* Title and Expand Icon */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <IconButton
             onClick={handleToggle}
-            size="small"
-            sx={{ p: 0.5 }}
+            size={isSmallScreen ? "medium" : "small"} // Larger touch target
+            sx={{ p: isSmallScreen ? 1 : 0.5 }}
           >
             <ExpandMore
               sx={{
@@ -225,18 +232,24 @@ const BudgetCategoryGroup: React.FC<BudgetCategoryGroupProps> = ({
               }}
             />
           </IconButton>
-          <Typography variant="subtitle1" sx={{ color: budgetCategory.category.color }}>
+          <Typography variant="subtitle1" sx={{ color: budgetCategory.category.color, fontWeight: 600 }}>
             {budgetCategory.category.name}
           </Typography>
         </Box>
 
-        {/* Column Headers */}
-        <Typography variant="body2" sx={{ textAlign: 'right', color: 'text.secondary' }}>
-          Planned
-        </Typography>
-        <Typography variant="body2" sx={{ textAlign: 'right', color: 'text.secondary' }}>
-          Remaining
-        </Typography>
+        {/* Desktop Column Headers */}
+        {!isSmallScreen && (
+            <>
+                <Typography variant="body2" sx={{ textAlign: 'right', color: 'text.secondary' }}>
+                Planned
+                </Typography>
+                <Typography variant="body2" sx={{ textAlign: 'right', color: 'text.secondary' }}>
+                Remaining
+                </Typography>
+            </>
+        )}
+        
+        {/* Menu Button */}
         <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
           {categoryMenuButton}
         </Box>
@@ -271,117 +284,195 @@ const BudgetCategoryGroup: React.FC<BudgetCategoryGroupProps> = ({
                             {...provided.dragHandleProps}
                             onClick={() => !isEditing && onExpenseClick(expense)}
                             sx={{
-                              display: 'grid',
-                              gridTemplateColumns: '1fr 120px 120px 40px',
-                              gap: 1,
-                              alignItems: 'center',
-                              py: 0.5,
-                              px: 1,
+                              ...gridLayoutStyles,
                               cursor: 'pointer',
+                              borderBottom: isSmallScreen ? '1px solid' : 'none',
+                              borderColor: 'divider',
                               '&:hover': {
                                 backgroundColor: 'action.hover',
-                                '& .delete-icon': {
-                                  opacity: 1,
-                                },
-                                '& .editable-field': {
-                                  backgroundColor: 'action.selected'
-                                }
+                                '& .delete-icon': { opacity: 1 },
+                                '& .editable-field': { backgroundColor: 'action.selected' }
                               }
                             }}
                           >
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              {expense.fundId && (
-                                <SavingsTwoTone 
-                                  fontSize="small" 
-                                  sx={{ color: 'primary.main' }} 
-                                />
-                              )}
-                              {isEditing && isEditingName ? (
-                                <TextField
-                                  value={tempName}
-                                  onChange={(e) => setTempName(e.target.value)}
-                                  onBlur={handleSave}
-                                  onKeyDown={handleKeyPress}
-                                  size="small"
-                                  fullWidth
-                                  autoFocus
-                                  inputProps={{
-                                    onFocus: (e) => e.target.select()
-                                  }}
-                                  onClick={(e) => e.stopPropagation()}
-                                />
-                              ) : (
-                                <Typography 
-                                  variant="body2" 
-                                  noWrap 
-                                  className="editable-field"
-                                  onClick={() => handleStartEditing(expense, 'name')}
-                                  sx={{ 
-                                    px: 1, 
-                                    py: 0.5, 
-                                    borderRadius: 1,
-                                    flexGrow: 1,
-                                    cursor: 'text'
-                                  }}
-                                >
-                                  {expense.name}
-                                </Typography>
-                              )}
-                            </Box>
-                            {isEditing && isEditingAmount ? (
-                              <TextField
-                                value={tempAmount}
-                                onChange={(e) => setTempAmount(e.target.value)}
-                                onBlur={handleSave}
-                                onKeyDown={handleKeyPress}
-                                size="small"
-                                type="number"
-                                inputProps={{
-                                  onFocus: (e) => e.target.select()
-                                }}
-                                onClick={(e) => e.stopPropagation()}
-                              />
+                            {isSmallScreen ? (
+                                // --- MOBILE CARD LAYOUT ---
+                                <Box sx={{ width: '100%' }}>
+                                    {/* Row 1: Icon, Name (or Edit Name), and Delete */}
+                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
+                                            {expense.fundId && (
+                                                <SavingsTwoTone fontSize="small" sx={{ color: 'primary.main' }} />
+                                            )}
+                                            {isEditing && isEditingName ? (
+                                                <TextField
+                                                    value={tempName}
+                                                    onChange={(e) => setTempName(e.target.value)}
+                                                    onBlur={handleSave}
+                                                    onKeyDown={handleKeyPress}
+                                                    size="small"
+                                                    fullWidth
+                                                    autoFocus
+                                                    onClick={(e) => e.stopPropagation()}
+                                                />
+                                            ) : (
+                                                <Typography 
+                                                    variant="body1" 
+                                                    fontWeight={500}
+                                                    className="editable-field"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleStartEditing(expense, 'name');
+                                                    }}
+                                                >
+                                                    {expense.name}
+                                                </Typography>
+                                            )}
+                                        </Box>
+                                        <IconButton
+                                            size="medium"
+                                            onClick={(e) => handleDeleteClick(expense, e)}
+                                            color="default"
+                                            sx={{ mr: -1.5 }}
+                                        >
+                                            <Delete />
+                                        </IconButton>
+                                    </Box>
+
+                                    {/* Row 2: Planned */}
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                                        <Typography variant="caption" color="text.secondary">Planned</Typography>
+                                        {isEditing && isEditingAmount ? (
+                                            <TextField
+                                                value={tempAmount}
+                                                onChange={(e) => setTempAmount(e.target.value)}
+                                                onBlur={handleSave}
+                                                onKeyDown={handleKeyPress}
+                                                size="small"
+                                                type="number"
+                                                sx={{ maxWidth: 100 }}
+                                                onClick={(e) => e.stopPropagation()}
+                                            />
+                                        ) : (
+                                            <Typography 
+                                                variant="body2" 
+                                                className="editable-field"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleStartEditing(expense, 'amount');
+                                                }}
+                                            >
+                                                ${expense.amount.toFixed(2)}
+                                            </Typography>
+                                        )}
+                                    </Box>
+
+                                    {/* Row 3: Remaining */}
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <Typography variant="caption" color="text.secondary">Remaining</Typography>
+                                        <Typography 
+                                            variant="body2" 
+                                            sx={{ color: remaining < 0 ? 'error.main' : 'primary.main' }}
+                                        >
+                                            ${remaining.toFixed(2)}
+                                        </Typography>
+                                    </Box>
+                                </Box>
                             ) : (
-                              <Typography 
-                                variant="body2" 
-                                className="editable-field"
-                                onClick={() => handleStartEditing(expense, 'amount')}
-                                sx={{ 
-                                  textAlign: 'right',
-                                  px: 1,
-                                  py: 0.5,
-                                  borderRadius: 1,
-                                  cursor: 'text'
-                                }}
-                              >
-                                ${expense.amount.toFixed(2)}
-                              </Typography>
+                                // --- DESKTOP GRID LAYOUT ---
+                                <>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        {expense.fundId && (
+                                            <SavingsTwoTone fontSize="small" sx={{ color: 'primary.main' }} />
+                                        )}
+                                        {isEditing && isEditingName ? (
+                                            <TextField
+                                            value={tempName}
+                                            onChange={(e) => setTempName(e.target.value)}
+                                            onBlur={handleSave}
+                                            onKeyDown={handleKeyPress}
+                                            size="small"
+                                            fullWidth
+                                            autoFocus
+                                            inputProps={{ onFocus: (e) => e.target.select() }}
+                                            onClick={(e) => e.stopPropagation()}
+                                            />
+                                        ) : (
+                                            <Typography 
+                                            variant="body2" 
+                                            noWrap 
+                                            className="editable-field"
+                                            onClick={() => handleStartEditing(expense, 'name')}
+                                            sx={{ 
+                                                px: 1, 
+                                                py: 0.5, 
+                                                borderRadius: 1,
+                                                flexGrow: 1,
+                                                cursor: 'text'
+                                            }}
+                                            >
+                                            {expense.name}
+                                            </Typography>
+                                        )}
+                                    </Box>
+
+                                    {/* Amount Column */}
+                                    {isEditing && isEditingAmount ? (
+                                        <TextField
+                                            value={tempAmount}
+                                            onChange={(e) => setTempAmount(e.target.value)}
+                                            onBlur={handleSave}
+                                            onKeyDown={handleKeyPress}
+                                            size="small"
+                                            type="number"
+                                            inputProps={{ onFocus: (e) => e.target.select() }}
+                                            onClick={(e) => e.stopPropagation()}
+                                        />
+                                    ) : (
+                                        <Typography 
+                                            variant="body2" 
+                                            className="editable-field"
+                                            onClick={() => handleStartEditing(expense, 'amount')}
+                                            sx={{ 
+                                            textAlign: 'right',
+                                            px: 1,
+                                            py: 0.5,
+                                            borderRadius: 1,
+                                            cursor: 'text'
+                                            }}
+                                        >
+                                            ${expense.amount.toFixed(2)}
+                                        </Typography>
+                                    )}
+
+                                    {/* Remaining Column */}
+                                    <Typography 
+                                        variant="body2" 
+                                        sx={{ 
+                                            textAlign: 'right',
+                                            color: remaining < 0 ? 'error.main' : 'primary.main'
+                                        }}
+                                    >
+                                        ${remaining.toFixed(2)}
+                                    </Typography>
+
+                                    {/* Delete Button Column */}
+                                    <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                        <IconButton
+                                            size="small"
+                                            onClick={(e) => handleDeleteClick(expense, e)}
+                                            className="delete-icon"
+                                            sx={{ 
+                                            opacity: 0,
+                                            transition: 'opacity 0.2s',
+                                            '&:hover': { color: 'error.main' }
+                                            }}
+                                        >
+                                            <Delete fontSize="small" />
+                                        </IconButton>
+                                    </Box>
+                                </>
                             )}
-                            <Typography 
-                              variant="body2" 
-                              sx={{ 
-                                textAlign: 'right',
-                                color: remaining < 0 ? 'error.main' : 'primary.main'
-                              }}
-                            >
-                              ${remaining.toFixed(2)}
-                            </Typography>
-                            <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                              <IconButton
-                                size="small"
-                                onClick={(e) => handleDeleteClick(expense, e)}
-                                className="delete-icon"
-                                sx={{ 
-                                  opacity: 0,
-                                  transition: 'opacity 0.2s',
-                                  '&:hover': {
-                                    color: 'error.main'
-                                  }
-                                }}
-                              >
-                                <Delete fontSize="small" />
-                              </IconButton>
-                            </Box>
                           </Box>
                         )}
                       </Draggable>
@@ -389,96 +480,150 @@ const BudgetCategoryGroup: React.FC<BudgetCategoryGroupProps> = ({
                   })}
                   {provided.placeholder}
 
-                  {/* New Expense Row */}
+                  {/* New Expense Input Row */}
                   {isAddingNewExpense && (
-                    <Box
-                      sx={{
-                        display: 'grid',
-                        gridTemplateColumns: '1fr 120px 120px 40px',
-                        gap: 1,
-                        alignItems: 'center',
-                        py: 0.5,
-                        px: 1,
-                      }}
-                    >
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <TextField
-                          value={tempName}
-                          onChange={(e) => setTempName(e.target.value)}
-                          onBlur={handleSave}
-                          onKeyDown={handleKeyPress}
-                          size="small"
-                          fullWidth
-                          autoFocus
-                          placeholder="Expense name"
-                          inputProps={{
-                            onFocus: (e) => e.target.select()
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      </Box>
-                      <TextField
-                        value={tempAmount}
-                        onChange={(e) => setTempAmount(e.target.value)}
-                        onBlur={handleSave}
-                        onKeyDown={handleKeyPress}
-                        size="small"
-                        type="number"
-                        inputProps={{
-                          onFocus: (e) => e.target.select()
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                      <Typography variant="body2" sx={{ textAlign: 'right' }}>
-                        ${parseFloat(tempAmount).toFixed(2)}
-                      </Typography>
-                      <Box /> {/* Spacer for alignment */}
+                    <Box sx={{ ...gridLayoutStyles, py: isSmallScreen ? 2 : 0.5 }}>
+                        {isSmallScreen ? (
+                            // Mobile Add Input
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, width: '100%' }}>
+                                <TextField
+                                    value={tempName}
+                                    onChange={(e) => setTempName(e.target.value)}
+                                    onBlur={handleSave}
+                                    onKeyDown={handleKeyPress}
+                                    size="medium"
+                                    fullWidth
+                                    autoFocus
+                                    placeholder="Expense name"
+                                    label="Name"
+                                    onClick={(e) => e.stopPropagation()}
+                                />
+                                <Box sx={{ display: 'flex', gap: 2 }}>
+                                    <TextField
+                                        value={tempAmount}
+                                        onChange={(e) => setTempAmount(e.target.value)}
+                                        onBlur={handleSave}
+                                        onKeyDown={handleKeyPress}
+                                        size="medium"
+                                        type="number"
+                                        label="Amount"
+                                        fullWidth
+                                        onClick={(e) => e.stopPropagation()}
+                                    />
+                                </Box>
+                            </Box>
+                        ) : (
+                            // Desktop Add Input
+                            <>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <TextField
+                                    value={tempName}
+                                    onChange={(e) => setTempName(e.target.value)}
+                                    onBlur={handleSave}
+                                    onKeyDown={handleKeyPress}
+                                    size="small"
+                                    fullWidth
+                                    autoFocus
+                                    placeholder="Expense name"
+                                    inputProps={{ onFocus: (e) => e.target.select() }}
+                                    onClick={(e) => e.stopPropagation()}
+                                    />
+                                </Box>
+                                <TextField
+                                    value={tempAmount}
+                                    onChange={(e) => setTempAmount(e.target.value)}
+                                    onBlur={handleSave}
+                                    onKeyDown={handleKeyPress}
+                                    size="small"
+                                    type="number"
+                                    inputProps={{ onFocus: (e) => e.target.select() }}
+                                    onClick={(e) => e.stopPropagation()}
+                                />
+                                <Typography variant="body2" sx={{ textAlign: 'right' }}>
+                                    ${parseFloat(tempAmount || '0').toFixed(2)}
+                                </Typography>
+                                <Box /> 
+                            </>
+                        )}
                     </Box>
                   )}
 
-                  {/* Add Expense and Totals Row */}
+                  {/* Add Button & Totals Row */}
                   <Box sx={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 120px 120px 40px',
-                    gap: 1,
-                    alignItems: 'center',
-                    py: 0.5,
-                    px: 1,
-                    borderTop: 1,
-                    borderColor: 'divider'
+                    ...gridLayoutStyles,
+                    borderTop: isSmallScreen ? 'none' : '1px solid',
+                    borderColor: 'divider',
+                    mt: isSmallScreen ? 1 : 0
                   }}>
-                    <Button
-                      startIcon={<Add />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleAddExpense();
-                      }}
-                      size="small"
-                      sx={{ ml: -1 }}
-                      disabled={isAddingNewExpense}
-                    >
-                      Add Expense
-                    </Button>
-                    <Typography 
-                      variant="body2" 
-                      sx={{ 
-                        textAlign: 'right',
-                        fontWeight: 600
-                      }}
-                    >
-                      ${totalPlanned.toFixed(2)}
-                    </Typography>
-                    <Typography 
-                      variant="body2"
-                      sx={{ 
-                        textAlign: 'right',
-                        fontWeight: 600,
-                        color: totalRemaining < 0 ? 'error.main' : 'primary.main'
-                      }}
-                    >
-                      ${totalRemaining.toFixed(2)}
-                    </Typography>
-                    <Box /> {/* Spacer for alignment */}
+                    {isSmallScreen ? (
+                        // Mobile Totals
+                        <Box sx={{ width: '100%' }}>
+                            <Button
+                                startIcon={<Add />}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleAddExpense();
+                                }}
+                                fullWidth
+                                variant="outlined"
+                                disabled={isAddingNewExpense}
+                                sx={{ mb: 2, justifyContent: 'flex-start' }}
+                            >
+                                Add Expense
+                            </Button>
+                            
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                                <Typography variant="body2" fontWeight="bold">Total Planned</Typography>
+                                <Typography variant="body2" fontWeight="bold">${totalPlanned.toFixed(2)}</Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <Typography variant="body2" fontWeight="bold">Total Remaining</Typography>
+                                <Typography 
+                                    variant="body2" 
+                                    fontWeight="bold"
+                                    sx={{ color: totalRemaining < 0 ? 'error.main' : 'primary.main' }}
+                                >
+                                    ${totalRemaining.toFixed(2)}
+                                </Typography>
+                            </Box>
+                        </Box>
+                    ) : (
+                        // Desktop Totals
+                        <>
+                            <Button
+                                startIcon={<Add />}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleAddExpense();
+                                }}
+                                size="small"
+                                sx={{ ml: -1 }}
+                                disabled={isAddingNewExpense}
+                            >
+                                Add Expense
+                            </Button>
+                            <Typography 
+                                variant="body2" 
+                                sx={{ 
+                                    textAlign: 'right',
+                                    fontWeight: 600
+                                }}
+                            >
+                                ${totalPlanned.toFixed(2)}
+                            </Typography>
+                            <Typography 
+                                variant="body2"
+                                sx={{ 
+                                    textAlign: 'right',
+                                    fontWeight: 600,
+                                    color: totalRemaining < 0 ? 'error.main' : 'primary.main'
+                                }}
+                            >
+                                ${totalRemaining.toFixed(2)}
+                            </Typography>
+                            <Box />
+                        </>
+                    )}
                   </Box>
                 </Box>
               )}
@@ -514,4 +659,4 @@ const BudgetCategoryGroup: React.FC<BudgetCategoryGroupProps> = ({
   );
 };
 
-export default BudgetCategoryGroup; 
+export default BudgetCategoryGroup;

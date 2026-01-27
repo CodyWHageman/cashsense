@@ -77,7 +77,8 @@ const Login: React.FC = () => {
     <Container component="main" maxWidth="xs">
       <Box
         sx={{
-          marginTop: 8,
+          // FIX: Reduce top margin on mobile (approx 16px vs 64px)
+          marginTop: { xs: 2, md: 8 },
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -106,13 +107,21 @@ const Login: React.FC = () => {
               src={logo} 
               alt="CashSense Logo" 
               style={{ 
+                // FIX: Constrain width to prevent "Hero Image" effect on mobile
+                maxWidth: '280px',
                 width: '100%',
                 height: 'auto',
                 objectFit: 'contain'
               }} 
             />
           </Box>
-          <Box sx={{ p: 4, width: '100%' }}>
+          <Box 
+            sx={{ 
+              // FIX: Reduce padding on mobile to save width
+              p: { xs: 2, md: 4 }, 
+              width: '100%' 
+            }}
+          >
             <Typography component="h1" variant="h5" align="center" gutterBottom>
               Sign In
             </Typography>
@@ -145,7 +154,7 @@ const Login: React.FC = () => {
                 type="submit"
                 fullWidth
                 variant="contained"
-                sx={{ mt: 3, mb: 2 }}
+                sx={{ mt: 3, mb: 2, py: 1.2 }} // Increased touch target height slightly
               >
                 Sign In
               </Button>
@@ -155,10 +164,11 @@ const Login: React.FC = () => {
                   variant="body2"
                   onClick={handleForgotPassword}
                   disabled={isResetting}
+                  sx={{ py: 1 }} // Add padding for easier touching
                 >
                   {isResetting ? 'Sending reset link...' : 'Forgot your password?'}
                 </Link>
-                <Link component={RouterLink} to="/signup" variant="body2">
+                <Link component={RouterLink} to="/signup" variant="body2" sx={{ py: 1 }}>
                   Don't have an account? Sign Up
                 </Link>
               </Box>

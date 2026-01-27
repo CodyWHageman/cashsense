@@ -1,36 +1,29 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Button,
   IconButton,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Typography,
   LinearProgress,
   Grid,
   Card,
   CardContent,
+  CardActionArea,
   CardActions,
   Drawer,
-  useTheme
+  Fab,
+  Dialog,
+  useTheme,
+  Chip
 } from '@mui/material';
-import { Add as AddIcon, Edit as EditIcon, AccountBalance as AccountBalanceIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { Add, Edit, Delete, Savings, Bolt } from '@mui/icons-material';
 import { Fund } from '../../models/Budget';
-import { getUserFunds, getFundBalance, updateFund, createFund, deleteFund } from '../../services/fundService';
 import { calculateFundBalance, FundWithBalance } from '../../utils/fundUtils';
 import FundEditor from './FundEditor';
 import FundTransactionDialog from './FundTransactionDialog';
 import FundDetail from './FundDetail';
-import { useAuth } from '../../contexts/AuthContext';
-import { useConfirm } from 'material-ui-confirm';
-import { useSnackbar } from 'notistack';
-import { useResponsive } from '../../hooks/useResponsive';
 import { useFund } from '../../contexts/FundContext';
+import { useResponsive } from '../../hooks/useResponsive';
 
 interface FundManagerProps {
   userId: string;
@@ -48,11 +41,8 @@ interface TransactionDialogState {
 }
 
 export function FundManager({ userId }: FundManagerProps) {
-  const { isMobile } = useResponsive();
+  const { isSmallScreen } = useResponsive();
   const theme = useTheme();
-  const { user } = useAuth();
-  const confirm = useConfirm();
-  const { enqueueSnackbar } = useSnackbar();
   
   const { 
     funds, 
@@ -103,111 +93,145 @@ export function FundManager({ userId }: FundManagerProps) {
     }
   };
 
-  const handleAddTransaction = (fund: Fund) => {
-    setTransactionDialog({
-      open: true,
-      fundId: fund.id,
-      fundName: fund.name
-    });
-  };
-
-  const handleTransactionDialogClose = () => {
-    setTransactionDialog({
-      open: false,
-      fundId: '',
-      fundName: ''
-    });
-  };
-
   const renderFundCard = (fund: FundWithBalance) => {
     const { balance } = calculateFundBalance(fund);
-    const progress = (balance / fund.targetAmount) * 100;
+    const progress = Math.min((balance / fund.targetAmount) * 100, 100);
+    const isCompleted = balance >= fund.targetAmount;
 
     return (
       <Card 
         key={fund.id}
+        variant="outlined"
         sx={{ 
           height: '100%',
           display: 'flex',
           flexDirection: 'column',
-          cursor: 'pointer',
+          borderColor: isCompleted ? 'success.light' : 'divider',
+          bgcolor: isCompleted ? 'success.lighter' : 'background.paper',
+          transition: 'transform 0.2s',
           '&:hover': {
-            boxShadow: theme.shadows[4]
+             transform: 'translateY(-2px)',
+             boxShadow: theme.shadows[4]
           }
         }}
-        onClick={() => setSelectedFund(fund)}
       >
-        <CardContent sx={{ flexGrow: 1 }}>
-          <Typography variant="h6" gutterBottom>
-            {fund.name}
-          </Typography>
-          <Typography variant="h5" color={balance >= 0 ? 'success.main' : 'error.main'}>
-            ${balance.toFixed(2)}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" gutterBottom>
-            Target: ${fund.targetAmount.toFixed(2)}
-          </Typography>
-          <LinearProgress 
-            variant="determinate" 
-            value={Math.min(progress, 100)}
-            color={progress >= 100 ? "success" : "primary"}
-            sx={{ mt: 1 }}
-          />
-        </CardContent>
-        <CardActions>
-          <IconButton 
+        <CardActionArea 
+            onClick={() => setSelectedFund(fund)}
+            sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', p: 0 }}
+        >
+            <CardContent sx={{ width: '100%', p: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Savings color={isCompleted ? "success" : "primary"} />
+                    <Typography variant="h6" fontWeight={600} noWrap>
+                        {fund.name}
+                    </Typography>
+                </Box>
+                {isCompleted && (
+                    <Chip label="GOAL MET" color="success" size="small" sx={{ fontWeight: 'bold', height: 20, fontSize: '0.65rem' }} />
+                )}
+            </Box>
+
+            <Box sx={{ mb: 2 }}>
+                <Typography variant="h4" fontWeight={700} color={balance >= fund.targetAmount ? 'success.main' : 'text.primary'}>
+                    ${balance.toLocaleString()}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                    of ${fund.targetAmount.toLocaleString()} target
+                </Typography>
+            </Box>
+
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <LinearProgress 
+                    variant="determinate" 
+                    value={progress}
+                    color={isCompleted ? "success" : "primary"}
+                    sx={{ flexGrow: 1, height: 8, borderRadius: 4 }}
+                />
+                <Typography variant="caption" fontWeight="bold">
+                    {Math.round(progress)}%
+                </Typography>
+            </Box>
+            </CardContent>
+        </CardActionArea>
+
+        <CardActions sx={{ borderTop: 1, borderColor: 'divider', justifyContent: 'space-between', px: 2, py: 1 }}>
+          {/* Quick Action: Add Transaction */}
+          <Button 
             size="small" 
-            onClick={(e) => {
-              e.stopPropagation();
-              handleEditFund(fund);
-            }}
+            startIcon={<Bolt />} 
+            onClick={() => setTransactionDialog({ open: true, fundId: fund.id, fundName: fund.name })}
           >
-            <EditIcon />
-          </IconButton>
-          <IconButton 
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDeleteFund(fund.id);
-            }}
-          >
-            <DeleteIcon />
-          </IconButton>
+            Add $
+          </Button>
+
+          <Box>
+            <IconButton 
+                size="small" 
+                onClick={(e) => { e.stopPropagation(); handleEditFund(fund); }}
+            >
+                <Edit fontSize="small" />
+            </IconButton>
+            <IconButton 
+                size="small"
+                onClick={(e) => { e.stopPropagation(); handleDeleteFund(fund.id); }}
+            >
+                <Delete fontSize="small" />
+            </IconButton>
+          </Box>
         </CardActions>
       </Card>
     );
   };
 
   return (
-    <Box sx={{ p: 2 }}>
-      <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        mb: 3
-      }}>
-        <Typography variant="h5">Funds</Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setEditDialog({ open: true, fund: {} })}
-        >
-          Add Fund
-        </Button>
+    <Box>
+      {/* HEADER */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h5" fontWeight={700}>Savings Funds</Typography>
+        {!isSmallScreen && (
+            <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={() => setEditDialog({ open: true, fund: {} })}
+            >
+            New Fund
+            </Button>
+        )}
       </Box>
 
+      {/* LIST CONTENT */}
       {loading ? (
         <LinearProgress />
       ) : (
-        <Grid container spacing={2}>
+        <Grid container spacing={2} pb={isSmallScreen ? 10 : 0}>
           {funds.map(fund => (
-            <Grid item xs={12} sm={6} md={4} lg={3} key={fund.id}>
+            <Grid item xs={12} sm={6} md={4} key={fund.id}>
               {renderFundCard(fund)}
             </Grid>
           ))}
+          {funds.length === 0 && (
+              <Box sx={{ width: '100%', textAlign: 'center', mt: 4, opacity: 0.6 }}>
+                  <Savings sx={{ fontSize: 60, mb: 2 }} />
+                  <Typography>No funds created yet.</Typography>
+              </Box>
+          )}
         </Grid>
       )}
 
+      {/* MOBILE FAB */}
+      {isSmallScreen && (
+        <Fab
+          color="primary"
+          aria-label="add"
+          sx={{ position: 'fixed', bottom: 80, right: 16, zIndex: 1000 }} // Bottom 80 to clear BottomNav
+          onClick={() => setEditDialog({ open: true, fund: {} })}
+        >
+          <Add />
+        </Fab>
+      )}
+
+      {/* DIALOGS */}
       <FundEditor
         open={editDialog.open}
         onClose={() => setEditDialog({ open: false, fund: {} })}
@@ -215,44 +239,38 @@ export function FundManager({ userId }: FundManagerProps) {
         fund={editDialog.fund}
         userId={userId}
       />
+      
+      {transactionDialog.open && (
+        <FundTransactionDialog
+            open={transactionDialog.open}
+            onClose={() => setTransactionDialog({ open: false, fundId: '', fundName: '' })}
+            fundId={transactionDialog.fundId}
+            fundName={transactionDialog.fundName}
+        />
+      )}
 
-      {isMobile ? (
+      {/* DETAIL VIEW: Drawer (Mobile) vs Dialog (Desktop) */}
+      {isSmallScreen ? (
         <Drawer
           anchor="bottom"
           open={Boolean(selectedFund)}
           onClose={() => setSelectedFund(null)}
           PaperProps={{
-            sx: {
-              height: '90vh',
-              borderTopLeftRadius: 16,
-              borderTopRightRadius: 16
-            }
+            sx: { height: '85vh', borderTopLeftRadius: 20, borderTopRightRadius: 20 }
           }}
         >
-          {selectedFund && (
-            <Box sx={{ p: 2 }}>
-              <FundDetail fund={selectedFund} />
-            </Box>
-          )}
+          {selectedFund && <FundDetail fund={selectedFund} />}
         </Drawer>
       ) : (
-        selectedFund && (
-          <Box sx={{ 
-            position: 'fixed',
-            right: 0,
-            top: 0,
-            width: '400px',
-            height: '100vh',
-            bgcolor: 'background.paper',
-            borderLeft: `1px solid ${theme.palette.divider}`,
-            overflowY: 'auto'
-          }}>
-            <FundDetail
-              fund={selectedFund}
-            />
-          </Box>
-        )
+        <Dialog
+            open={Boolean(selectedFund)}
+            onClose={() => setSelectedFund(null)}
+            maxWidth="sm"
+            fullWidth
+        >
+             {selectedFund && <FundDetail fund={selectedFund} />}
+        </Dialog>
       )}
     </Box>
   );
-} 
+}
