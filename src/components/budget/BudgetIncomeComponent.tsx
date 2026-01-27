@@ -15,12 +15,15 @@ import {
   TextField,
   Collapse,
   Paper,
+  SxProps, 
+  Theme
 } from '@mui/material';
 import { Add, MoreVert, Edit, Delete, ExpandMore, LocalAtmTwoTone } from '@mui/icons-material';
 import { BudgetIncome } from '../../models/Budget';
 import { createIncome, updateIncome, deleteIncome } from '../../services/incomeService';
 import { getMonthName } from '../../utils/dateUtils';
 import { useBudget } from '../../contexts/BudgetContext';
+import { useResponsive } from '../../hooks/useResponsive';
 
 interface BudgetIncomeProps {
   onIncomeClick: (income: BudgetIncome) => void;
@@ -45,6 +48,8 @@ function BudgetIncomeComponent({
   onIncomeClick
 }: BudgetIncomeProps) {
   const { currentBudget, handleIncomeUpdated, handleIncomeDeleted } = useBudget();
+  const { isSmallScreen } = useResponsive();
+  
   const [editDialog, setEditDialog] = useState<EditDialogState>({ 
     open: false, 
     income: null 
@@ -147,18 +152,27 @@ function BudgetIncomeComponent({
   const handleToggle = () => {
     setExpanded(!expanded);
   };
+
+  // Explicitly type the style object to satisfy MUI's SxProps
+  const gridLayoutStyles: SxProps<Theme> = {
+    display: isSmallScreen ? 'flex' : 'grid',
+    flexDirection: isSmallScreen ? 'column' : 'row',
+    gridTemplateColumns: isSmallScreen ? undefined : '1fr 120px 120px 40px',
+    gap: 1,
+    alignItems: 'center',
+    px: isSmallScreen ? 2 : 1,
+    py: isSmallScreen ? 1.5 : 0.5,
+  };
   
   return (
     <Paper className="category-section">
-       {/* ... existing JSX content ... */}
+      {/* HEADER SECTION */}
       <Box sx={{
-        display: 'grid',
-        gridTemplateColumns: '1fr 120px 120px 40px',
-        gap: 1,
-        alignItems: 'center',
-        p: 1,
+        ...gridLayoutStyles,
+        py: 1, 
         borderBottom: 1,
-        borderColor: 'divider'
+        borderColor: 'divider',
+        justifyContent: isSmallScreen ? 'space-between' : undefined
       }}>
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
           <ExpandMore
@@ -167,22 +181,28 @@ function BudgetIncomeComponent({
               transform: expanded ? 'rotate(180deg)' : 'none',
               transition: 'transform 0.2s',
               cursor: 'pointer',
-              mr: 1
+              mr: 1,
+              p: isSmallScreen ? 0.5 : 0
             }}
           />
           <LocalAtmTwoTone sx={{ mr: 1, color: 'primary.main' }} />
           <Typography variant="subtitle1">
-            Income for {getMonthName(currentBudget?.month || 0)}
+            {isSmallScreen ? 'Income' : `Income for ${getMonthName(currentBudget?.month || 0)}`}
           </Typography>
         </Box>
 
-        <Typography variant="body2" sx={{ textAlign: 'right', color: 'text.secondary' }}>
-          Planned
-        </Typography>
-        <Typography variant="body2" sx={{ textAlign: 'right', color: 'text.secondary' }}>
-          Received
-        </Typography>
-        <Box /> 
+        {/* Hide column headers on mobile */}
+        {!isSmallScreen && (
+          <>
+            <Typography variant="body2" sx={{ textAlign: 'right', color: 'text.secondary' }}>
+              Planned
+            </Typography>
+            <Typography variant="body2" sx={{ textAlign: 'right', color: 'text.secondary' }}>
+              Received
+            </Typography>
+            <Box /> 
+          </>
+        )}
       </Box>
 
       <Collapse in={expanded}>
@@ -191,96 +211,168 @@ function BudgetIncomeComponent({
             <ListItem
               key={income.id}
               sx={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 120px 120px 40px',
-                gap: 1,
-                alignItems: 'center',
-                py: 0.5,
-                px: 1,
+                ...gridLayoutStyles,
                 cursor: 'pointer',
+                borderBottom: isSmallScreen ? '1px solid' : 'none',
+                borderColor: 'divider',
                 '&:hover': {
                   backgroundColor: 'action.hover',
                 }
               }}
               onClick={() => onIncomeClick(income)}
             >
-              <Typography variant="body2" noWrap>
-                {income.name}
-              </Typography>
-              <Typography 
-                variant="body2" 
-                className="MuiTypography-amount" 
-                sx={{ textAlign: 'right' }}
-              >
-                ${income.amount.toFixed(2)}
-              </Typography>
-              <Typography 
-                variant="body2"
-                className="MuiTypography-remaining"
-                sx={{ 
-                  textAlign: 'right',
-                  color: income.amount - getIncomeReceived(income.id) < 0 ? 'error.main' : 'primary.main'
-                }}
-              >
-                ${getIncomeReceived(income.id).toFixed(2)}
-              </Typography>
-              <IconButton
-                size="small"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleOpenMenu(e, income.id);
-                }}
-                sx={{ 
-                  color: 'text.secondary',
-                  p: 0.5
-                }}
-              >
-                <MoreVert fontSize="small" />
-              </IconButton>
+               {/* CONTENT: Mobile vs Desktop */}
+               {isSmallScreen ? (
+                 // --- MOBILE CARD LAYOUT ---
+                 <Box sx={{ width: '100%' }}>
+                    {/* Row 1: Name & Menu */}
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                        <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                          {income.name}
+                        </Typography>
+                        <IconButton
+                          size="medium"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenMenu(e, income.id);
+                          }}
+                          sx={{ color: 'text.secondary', mr: -1 }}
+                        >
+                          <MoreVert />
+                        </IconButton>
+                    </Box>
+
+                    {/* Row 2: Planned */}
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                        <Typography variant="caption" color="text.secondary">Planned</Typography>
+                        <Typography variant="body2">${income.amount.toFixed(2)}</Typography>
+                    </Box>
+
+                    {/* Row 3: Received */}
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <Typography variant="caption" color="text.secondary">Received</Typography>
+                        <Typography 
+                          variant="body2"
+                          sx={{ 
+                            color: income.amount - getIncomeReceived(income.id) < 0 ? 'error.main' : 'primary.main'
+                          }}
+                        >
+                          ${getIncomeReceived(income.id).toFixed(2)}
+                        </Typography>
+                    </Box>
+                 </Box>
+               ) : (
+                 // --- DESKTOP GRID LAYOUT ---
+                 <>
+                    <Typography variant="body2" noWrap>
+                      {income.name}
+                    </Typography>
+                    <Typography 
+                      variant="body2" 
+                      className="MuiTypography-amount" 
+                      sx={{ textAlign: 'right' }}
+                    >
+                      ${income.amount.toFixed(2)}
+                    </Typography>
+                    <Typography 
+                      variant="body2"
+                      className="MuiTypography-remaining"
+                      sx={{ 
+                        textAlign: 'right',
+                        color: income.amount - getIncomeReceived(income.id) < 0 ? 'error.main' : 'primary.main'
+                      }}
+                    >
+                      ${getIncomeReceived(income.id).toFixed(2)}
+                    </Typography>
+                    <IconButton
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenMenu(e, income.id);
+                      }}
+                      sx={{ 
+                        color: 'text.secondary',
+                        p: 0.5
+                      }}
+                    >
+                      <MoreVert fontSize="small" />
+                    </IconButton>
+                 </>
+               )}
             </ListItem>
           ))}
 
+          {/* TOTALS / ADD BUTTON ROW */}
           <ListItem
             sx={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 120px 120px 40px',
-              gap: 1,
-              py: 0.5,
-              px: 1,
-              borderTop: 1,
-              borderColor: 'divider'
+              ...gridLayoutStyles,
+              borderTop: isSmallScreen ? 'none' : '1px solid',
+              borderColor: 'divider',
+              mt: isSmallScreen ? 1 : 0
             }}
           >
-            <Button
-              startIcon={<Add />}
-              onClick={() => handleEditIncome()}
-              size="small"
-              sx={{ ml: -1 }}
-            >
-              Add Income
-            </Button>
-            <Typography 
-              variant="body2" 
-              className="MuiTypography-amount" 
-              sx={{ 
-                textAlign: 'right',
-                fontWeight: 600
-              }}
-            >
-              ${totalPlanned.toFixed(2)}
-            </Typography>
-            <Typography 
-              variant="body2"
-              className="MuiTypography-remaining"
-              sx={{ 
-                textAlign: 'right',
-                fontWeight: 600,
-                color: (totalPlanned - totalReceived) < 0 ? 'error.main' : 'primary.main'
-              }}
-            >
-              ${totalReceived.toFixed(2)}
-            </Typography>
-            <Box /> 
+            {isSmallScreen ? (
+                // --- MOBILE TOTALS LAYOUT ---
+                <Box sx={{ width: '100%' }}>
+                    <Button
+                        startIcon={<Add />}
+                        onClick={() => handleEditIncome()}
+                        fullWidth
+                        variant="outlined"
+                        sx={{ mb: 2, justifyContent: 'flex-start' }}
+                    >
+                        Add Income
+                    </Button>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                        <Typography variant="body2" fontWeight="bold">Total Planned</Typography>
+                        <Typography variant="body2" fontWeight="bold">${totalPlanned.toFixed(2)}</Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <Typography variant="body2" fontWeight="bold">Total Received</Typography>
+                        <Typography 
+                            variant="body2" 
+                            fontWeight="bold"
+                            sx={{ color: (totalPlanned - totalReceived) < 0 ? 'error.main' : 'primary.main' }}
+                        >
+                            ${totalReceived.toFixed(2)}
+                        </Typography>
+                    </Box>
+                </Box>
+            ) : (
+                // --- DESKTOP TOTALS LAYOUT ---
+                <>
+                    <Button
+                      startIcon={<Add />}
+                      onClick={() => handleEditIncome()}
+                      size="small"
+                      sx={{ ml: -1 }}
+                    >
+                      Add Income
+                    </Button>
+                    <Typography 
+                      variant="body2" 
+                      className="MuiTypography-amount" 
+                      sx={{ 
+                        textAlign: 'right',
+                        fontWeight: 600
+                      }}
+                    >
+                      ${totalPlanned.toFixed(2)}
+                    </Typography>
+                    <Typography 
+                      variant="body2"
+                      className="MuiTypography-remaining"
+                      sx={{ 
+                        textAlign: 'right',
+                        fontWeight: 600,
+                        color: (totalPlanned - totalReceived) < 0 ? 'error.main' : 'primary.main'
+                      }}
+                    >
+                      ${totalReceived.toFixed(2)}
+                    </Typography>
+                    <Box /> 
+                </>
+            )}
           </ListItem>
         </List>
       </Collapse>

@@ -43,7 +43,8 @@ const Signup: React.FC = () => {
     <Container component="main" maxWidth="xs">
       <Box
         sx={{
-          marginTop: 8,
+          // FIX: Responsive margin to pull content up on mobile
+          marginTop: { xs: 2, md: 8 },
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -65,19 +66,28 @@ const Signup: React.FC = () => {
               borderColor: 'divider',
               display: 'flex',
               justifyContent: 'center',
+              backgroundColor: 'background.paper',
             }}
           >
             <img 
               src={logo} 
               alt="CashSense Logo" 
               style={{ 
+                // FIX: Constrain width so it doesn't dominate mobile screens
+                maxWidth: '280px',
                 width: '100%',
                 height: 'auto',
                 objectFit: 'contain'
               }} 
             />
           </Box>
-          <Box sx={{ p: 4, width: '100%' }}>
+          <Box 
+            sx={{ 
+              // FIX: Reduce padding on mobile (16px vs 32px)
+              p: { xs: 2, md: 4 }, 
+              width: '100%' 
+            }}
+          >
             <Typography component="h1" variant="h5" align="center" gutterBottom>
               Sign Up
             </Typography>
@@ -122,12 +132,21 @@ const Signup: React.FC = () => {
                 type="submit"
                 fullWidth
                 variant="contained"
-                sx={{ mt: 3, mb: 2 }}
+                sx={{ 
+                  mt: 3, 
+                  mb: 2,
+                  py: 1.2 // Increased touch target height
+                }}
               >
                 Sign Up
               </Button>
               <Box sx={{ textAlign: 'center' }}>
-                <Link component={RouterLink} to="/login" variant="body2">
+                <Link 
+                  component={RouterLink} 
+                  to="/login" 
+                  variant="body2"
+                  sx={{ py: 1, display: 'inline-block' }} // Easier to tap
+                >
                   Already have an account? Sign In
                 </Link>
               </Box>

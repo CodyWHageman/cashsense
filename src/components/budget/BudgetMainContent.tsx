@@ -1,26 +1,28 @@
-import { Box, styled, Typography, Button } from '@mui/material';
+import { Box, styled, Typography, Button, Paper } from '@mui/material';
 import BudgetIncomeComponent from './BudgetIncomeComponent';
 import BudgetCategories from './BudgetCategories';
-import { Budget, BudgetIncome, BudgetExpense, BudgetCategory } from '../../models/Budget';
+import { Budget, BudgetIncome, BudgetExpense } from '../../models/Budget';
 import { getMonthName } from '../../utils/dateUtils';
 import BudgetHeader from './BudgetHeader';
-import { Paper } from '@mui/material';
 import { useResponsive } from '../../hooks/useResponsive';
 import { useBudget } from '../../contexts/BudgetContext';
 
+// FIX: Improved centering logic
 const MainContent = styled('main')(({ theme }) => ({
     padding: theme.spacing(3),
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
     marginBottom: theme.spacing(10),
+    width: '100%', // Default width
+    
     [theme.breakpoints.up('md')]: {
-        width: '800px',
-        maxWidth: '100%'
+        maxWidth: '800px', // Constrain max width
+        margin: '0 auto',  // Center horizontally
     },
     [theme.breakpoints.down('md')]: {
-        width: '100%',
-        padding: theme.spacing(2)
+        maxWidth: '100%',
+        padding: theme.spacing(1.5) // Reduced padding for mobile
     }
 }));
 
@@ -41,7 +43,8 @@ export function BudgetMainContent({
         <Box sx={{
             display: 'flex',
             flexDirection: 'column',
-            width: '100%'
+            width: '100%',
+            overflowX: 'hidden' // FIX: Prevent accidental horizontal scroll at root
         }}>
             <BudgetHeader />
             <MainContent>
@@ -75,4 +78,4 @@ export function BudgetMainContent({
             </MainContent>
         </Box>
     );
-} 
+}
