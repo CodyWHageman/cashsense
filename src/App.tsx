@@ -8,10 +8,13 @@ import { useAuth } from './contexts/AuthContext';
 import { MainLayout } from './components/layout/MainLayout';
 import { BudgetProvider } from './contexts/BudgetContext';
 import { FundProvider } from './contexts/FundContext';
+import { useResponsive } from './hooks/useResponsive'; // Import the hook
+
 // Lazy load components
 const Login = React.lazy(() => import('./components/auth/Login'));
 const Signup = React.lazy(() => import('./components/auth/Signup'));
 const ResetPassword = React.lazy(() => import('./components/auth/ResetPassword'));
+const DashboardPage = React.lazy(() => import('./components/pages/DashboardPage'));
 const BudgetPage = React.lazy(() => import('./components/pages/BudgetPage'));
 const FundPage = React.lazy(() => import('./components/pages/FundPage'));
 const HelpPage = React.lazy(() => import('./components/pages/HelpPage'));
@@ -29,15 +32,18 @@ const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
   const location = useLocation();
 
-  if (loading) {
-    return <LoadingFallback />;
-  }
+  if (loading) return <LoadingFallback />;
+  if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
 
-  if (!user) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
-  }
+  return <>{children}</>;
+};
 
-  return children;
+// --- NEW COMPONENT: ROOT DISPATCHER ---
+// Decides where to send the user based on their device
+const RootDispatcher = () => {
+  const { isSmallScreen } = useResponsive();
+  // Mobile -> Dashboard, Desktop -> Budget
+  return isSmallScreen ? <Navigate to="/dashboard" replace /> : <Navigate to="/budget" replace />;
 };
 
 function App() {
@@ -52,8 +58,37 @@ function App() {
                 <Route path="/signup" element={<Signup />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
                 
+                {/* --- ROOT PATH: Redirects based on device --- */}
                 <Route 
                   path="/" 
+                  element={
+                    <PrivateRoute>
+                      <MainLayout>
+                        <RootDispatcher />
+                      </MainLayout>
+                    </PrivateRoute>
+                  } 
+                />
+
+                {/* --- DASHBOARD ROUTE --- */}
+                <Route 
+                  path="/dashboard" 
+                  element={
+                    <PrivateRoute>
+                      <MainLayout>
+                        <BudgetProvider>
+                          <FundProvider>
+                            <DashboardPage />
+                          </FundProvider>
+                        </BudgetProvider>
+                      </MainLayout>
+                    </PrivateRoute>
+                  } 
+                />
+
+                {/* --- BUDGET ROUTE (Now explicit) --- */}
+                <Route 
+                  path="/budget" 
                   element={
                     <PrivateRoute>
                       <MainLayout>
@@ -112,4 +147,4 @@ function App() {
   );
 }
 
-export default App; 
+export default App;

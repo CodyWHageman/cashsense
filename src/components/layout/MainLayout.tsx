@@ -1,11 +1,10 @@
-import { useState } from 'react';
-import { Box, Button, Menu, MenuItem, Tooltip, Zoom } from '@mui/material';
+import { useState, useEffect } from 'react';
+import { Box, Menu, MenuItem } from '@mui/material';
 import  SideNavigation from '../navigation/SideNavigation';
 import { useResponsive } from '../../hooks/useResponsive';
 import { MobileNavigation } from '../navigation/MobileNavigation';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { KeyboardArrowUp } from '@mui/icons-material';
 import ScrollToTopButton from '../common/ScrollToTopButton';
 
 interface MainLayoutProps {
@@ -18,23 +17,32 @@ export function MainLayout({ children }: MainLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null);
-  const [showScrollTop, setShowScrollTop] = useState(false);
 
   // Map routes to view names
   const routeToView: { [key: string]: string } = {
-    '/': 'budget',
+    '/dashboard': 'dashboard',
+    '/budget': 'budget', // Updated from '/'
     '/funds': 'funds',
     '/help': 'help',
     '/settings': 'settings'
   };
 
-  const [currentView, setCurrentView] = useState(routeToView[location.pathname] || 'budget');
+  // Determine current view, defaulting to budget if undefined (e.g. root)
+  const initialView = routeToView[location.pathname] || 'budget';
+  const [currentView, setCurrentView] = useState(initialView);
+
+  // Sync state with location changes (important for redirects)
+  useEffect(() => {
+    const view = routeToView[location.pathname];
+    if (view) setCurrentView(view);
+  }, [location.pathname]);
 
   const handleViewChange = (view: string) => {
     setCurrentView(view);
     // Map view names to routes
     const viewToRoute: { [key: string]: string } = {
-      'budget': '/',
+      'dashboard': '/dashboard',
+      'budget': '/budget', // Updated from '/'
       'funds': '/funds',
       'help': '/help',
       'settings': '/settings'
@@ -55,9 +63,6 @@ export function MainLayout({ children }: MainLayoutProps) {
     await signOut();
     navigate('/login');
   };
-
-  // Get display name directly from user metadata
-  const displayName = user?.displayName || null;
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
@@ -98,4 +103,4 @@ export function MainLayout({ children }: MainLayoutProps) {
       <ScrollToTopButton />
     </Box>
   );
-} 
+}

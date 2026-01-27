@@ -16,7 +16,7 @@ import {
 } from '@mui/material';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { BudgetCategory, BudgetExpense, BudgetExpenseCreateDTO, BudgetExpenseUpdateDTO } from '../../models/Budget';
-import { ExpandMore, Add, SavingsTwoTone, Delete } from '@mui/icons-material';
+import { ExpandMore, Add, SavingsTwoTone, Delete, PushPin, PushPinOutlined } from '@mui/icons-material';
 import { useResponsive } from '../../hooks/useResponsive';
 
 interface BudgetCategoryGroupProps {
@@ -59,6 +59,20 @@ const BudgetCategoryGroup: React.FC<BudgetCategoryGroupProps> = ({
   });
 
   const handleToggle = () => setExpanded(!expanded);
+
+  const handleToggleFavorite = async (expense: BudgetExpense) => {
+    try {
+        await onExpenseUpdate(expense.id, { 
+          isFavorite: !expense.isFavorite, 
+          name: expense.name, 
+          amount: expense.amount, 
+          dueDate: expense.dueDate, 
+          sequenceNumber: expense.sequenceNumber 
+        });
+    } catch (error) {
+        console.error('Error toggling favorite:', error);
+    }
+  };
 
   const handleStartEditing = (expense: BudgetExpense, field: 'name' | 'amount') => {
     setEditingExpenseId(expense.id);
@@ -196,14 +210,13 @@ const BudgetCategoryGroup: React.FC<BudgetCategoryGroupProps> = ({
     setTempAmount('');
   };
 
-  // Define layout styles for consistency
   const gridLayoutStyles: SxProps<Theme> = {
     display: isSmallScreen ? 'flex' : 'grid',
     flexDirection: isSmallScreen ? 'column' : 'row',
     gridTemplateColumns: isSmallScreen ? undefined : '1fr 120px 120px 40px',
     gap: 1,
     alignItems: 'center',
-    p: isSmallScreen ? 2 : 1, // Larger padding for touch
+    p: isSmallScreen ? 2 : 1, 
   };
 
   return (
@@ -211,18 +224,16 @@ const BudgetCategoryGroup: React.FC<BudgetCategoryGroupProps> = ({
       {/* HEADER ROW */}
       <Box sx={{
         ...gridLayoutStyles,
-        // FIX: Force 'row' layout for the header so the Title and Menu stay side-by-side
         flexDirection: isSmallScreen ? 'row' : undefined,
         justifyContent: isSmallScreen ? 'space-between' : undefined,
         borderBottom: 1,
         borderColor: 'divider',
         py: 1
       }}>
-        {/* Title and Expand Icon */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <IconButton
             onClick={handleToggle}
-            size={isSmallScreen ? "medium" : "small"} // Larger touch target
+            size={isSmallScreen ? "medium" : "small"} 
             sx={{ p: isSmallScreen ? 1 : 0.5 }}
           >
             <ExpandMore
@@ -237,7 +248,6 @@ const BudgetCategoryGroup: React.FC<BudgetCategoryGroupProps> = ({
           </Typography>
         </Box>
 
-        {/* Desktop Column Headers */}
         {!isSmallScreen && (
             <>
                 <Typography variant="body2" sx={{ textAlign: 'right', color: 'text.secondary' }}>
@@ -249,7 +259,6 @@ const BudgetCategoryGroup: React.FC<BudgetCategoryGroupProps> = ({
             </>
         )}
         
-        {/* Menu Button */}
         <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
           {categoryMenuButton}
         </Box>
@@ -298,7 +307,7 @@ const BudgetCategoryGroup: React.FC<BudgetCategoryGroupProps> = ({
                             {isSmallScreen ? (
                                 // --- MOBILE CARD LAYOUT ---
                                 <Box sx={{ width: '100%' }}>
-                                    {/* Row 1: Icon, Name (or Edit Name), and Delete */}
+                                    {/* Row 1: Icon, Name, and Actions */}
                                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
                                             {expense.fundId && (
@@ -329,14 +338,26 @@ const BudgetCategoryGroup: React.FC<BudgetCategoryGroupProps> = ({
                                                 </Typography>
                                             )}
                                         </Box>
-                                        <IconButton
-                                            size="medium"
-                                            onClick={(e) => handleDeleteClick(expense, e)}
-                                            color="default"
-                                            sx={{ mr: -1.5 }}
-                                        >
-                                            <Delete />
-                                        </IconButton>
+                                        <Box>
+                                            <IconButton
+                                                size="medium"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleToggleFavorite(expense);
+                                                }}
+                                                sx={{ color: expense.isFavorite ? 'primary.main' : 'text.disabled', mr: -1 }}
+                                            >
+                                                {expense.isFavorite ? <PushPin fontSize="small" /> : <PushPinOutlined fontSize="small" />}
+                                            </IconButton>
+                                            <IconButton
+                                                size="medium"
+                                                onClick={(e) => handleDeleteClick(expense, e)}
+                                                color="default"
+                                                sx={{ mr: -1.5 }}
+                                            >
+                                                <Delete />
+                                            </IconButton>
+                                        </Box>
                                     </Box>
 
                                     {/* Row 2: Planned */}
@@ -382,6 +403,20 @@ const BudgetCategoryGroup: React.FC<BudgetCategoryGroupProps> = ({
                                 // --- DESKTOP GRID LAYOUT ---
                                 <>
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <IconButton
+                                            size="small"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleToggleFavorite(expense);
+                                            }}
+                                            sx={{ 
+                                                color: expense.isFavorite ? 'primary.main' : 'text.disabled',
+                                                p: 0.5
+                                            }}
+                                        >
+                                            {expense.isFavorite ? <PushPin fontSize="small" /> : <PushPinOutlined fontSize="small" />}
+                                        </IconButton>
+
                                         {expense.fundId && (
                                             <SavingsTwoTone fontSize="small" sx={{ color: 'primary.main' }} />
                                         )}
@@ -480,7 +515,6 @@ const BudgetCategoryGroup: React.FC<BudgetCategoryGroupProps> = ({
                   })}
                   {provided.placeholder}
 
-                  {/* New Expense Input Row */}
                   {isAddingNewExpense && (
                     <Box sx={{ ...gridLayoutStyles, py: isSmallScreen ? 2 : 0.5 }}>
                         {isSmallScreen ? (
@@ -548,7 +582,6 @@ const BudgetCategoryGroup: React.FC<BudgetCategoryGroupProps> = ({
                     </Box>
                   )}
 
-                  {/* Add Button & Totals Row */}
                   <Box sx={{
                     ...gridLayoutStyles,
                     borderTop: isSmallScreen ? 'none' : '1px solid',
@@ -632,7 +665,6 @@ const BudgetCategoryGroup: React.FC<BudgetCategoryGroupProps> = ({
         </Box>
       </Collapse>
 
-      {/* Delete Confirmation Dialog */}
       <Dialog
         open={deleteConfirmation.open}
         onClose={() => setDeleteConfirmation({ open: false, expense: null })}
