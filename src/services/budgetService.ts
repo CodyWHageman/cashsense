@@ -79,6 +79,7 @@ const mapExpense = (doc: any, transactions: Transaction[] = [], splitTransaction
     createdAt: toDate(data.createdAt) || new Date(),
     updatedAt: toDate(data.updatedAt) || new Date(),
     sequenceNumber: data.sequenceNumber,
+    isFavorite: data.isFavorite || false,
     transactions: transactions,
     splitTransactions: splitTransactions
   };
@@ -95,7 +96,8 @@ const mapIncome = (doc: any, transactions: Transaction[] = []): BudgetIncome => 
     expectedDate: toDate(data.expectedDate),
     createdAt: toDate(data.createdAt) || new Date(),
     updatedAt: toDate(data.updatedAt) || new Date(),
-    transactions: transactions
+    transactions: transactions,
+    isFavorite: data.isFavorite || false
   };
 };
 

@@ -2,16 +2,14 @@ import React from 'react';
 import { 
   BottomNavigation, 
   BottomNavigationAction, 
-  Paper,
-  Box,
-  SwipeableDrawer,
   styled
 } from '@mui/material';
 import { 
   AccountBalanceTwoTone,
   CalculateTwoTone,
   SettingsTwoTone,
-  InfoTwoTone
+  InfoTwoTone,
+  DashboardTwoTone // <--- Import this
 } from '@mui/icons-material';
 
 const StyledBottomNavigation = styled(BottomNavigation)(({ theme }) => ({
@@ -37,6 +35,11 @@ export function MobileNavigation({ currentView, setCurrentView }: MobileNavigati
       showLabels
     >
       <BottomNavigationAction
+        label="Dash"
+        value="dashboard"
+        icon={<DashboardTwoTone />}
+      />
+      <BottomNavigationAction
         label="Budget"
         value="budget"
         icon={<CalculateTwoTone />}
@@ -51,11 +54,6 @@ export function MobileNavigation({ currentView, setCurrentView }: MobileNavigati
         value="settings"
         icon={<SettingsTwoTone />}
       />
-      <BottomNavigationAction
-        label="Help"
-        value="help"
-        icon={<InfoTwoTone />}
-      />
     </StyledBottomNavigation>
   );
-} 
+}

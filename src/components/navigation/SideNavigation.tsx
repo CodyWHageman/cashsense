@@ -31,7 +31,8 @@ export default function SideNavigation() {
   const theme = useTheme();
 
   const menuItems = [
-    { text: 'Budget', icon: <WalletIcon />, path: '/' },
+    { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' }, // <--- ADD THIS
+    { text: 'Budget', icon: <WalletIcon />, path: '/budget' },
     { text: 'Funds', icon: <SavingsIcon />, path: '/funds' },
     { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
     { text: 'Help', icon: <HelpIcon />, path: '/help' },
@@ -89,7 +90,7 @@ export default function SideNavigation() {
         {menuItems.map((item) => (
           <ListItem 
             key={item.text} 
-            button // Use button prop for clickable behavior
+            button
             onClick={() => navigate(item.path)}
             selected={location.pathname === item.path}
             sx={{

@@ -16,7 +16,7 @@ import {
   useTheme,
   Chip
 } from '@mui/material';
-import { Add, Edit, Delete, Savings, Bolt } from '@mui/icons-material';
+import { Add, Edit, Delete, Savings, Bolt, PushPin, PushPinOutlined } from '@mui/icons-material';
 import { Fund } from '../../models/Budget';
 import { calculateFundBalance, FundWithBalance } from '../../utils/fundUtils';
 import FundEditor from './FundEditor';
@@ -77,6 +77,14 @@ export function FundManager({ userId }: FundManagerProps) {
       setEditDialog({ open: false, fund: {} });
     } catch (error) {
       console.error('Error saving fund:', error);
+    }
+  };
+
+  const handleToggleFavorite = async (fund: Fund) => {
+    try {
+        await updateExistingFund(fund.id, { isFavorite: !fund.isFavorite });
+    } catch (error) {
+        console.error('Error toggling favorite fund:', error);
     }
   };
 
@@ -166,6 +174,13 @@ export function FundManager({ userId }: FundManagerProps) {
           </Button>
 
           <Box>
+            <IconButton
+                size="small"
+                onClick={(e) => { e.stopPropagation(); handleToggleFavorite(fund); }}
+                sx={{ color: fund.isFavorite ? 'primary.main' : 'text.disabled' }}
+            >
+                {fund.isFavorite ? <PushPin fontSize="small" /> : <PushPinOutlined fontSize="small" />}
+            </IconButton>
             <IconButton 
                 size="small" 
                 onClick={(e) => { e.stopPropagation(); handleEditFund(fund); }}

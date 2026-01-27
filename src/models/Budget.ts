@@ -31,6 +31,7 @@ export interface BudgetExpense {
   sequenceNumber: number;
   transactions?: Transaction[];
   splitTransactions?: SplitTransaction[];
+  isFavorite?: boolean;
 }
 
 export interface BudgetExpenseCreateDTO {
@@ -49,6 +50,7 @@ export interface BudgetExpenseUpdateDTO {
   dueDate: Date | null;
   fundId?: string | null;
   sequenceNumber: number;
+  isFavorite?: boolean;
 }
 
 export interface BudgetIncome {
@@ -61,6 +63,7 @@ export interface BudgetIncome {
   createdAt: Date;
   updatedAt: Date;
   transactions?: Transaction[];
+  isFavorite?: boolean;
 }
 
 export interface BudgetIncomeCreateDTO {
@@ -76,6 +79,7 @@ export interface BudgetIncomeUpdateDTO {
   amount: number;
   frequency: 'monthly' | 'weekly' | 'bi-weekly';
   expectedDate: Date | null;
+  isFavorite?: boolean;
 }
 
 export interface ExpenseCategory {
@@ -121,4 +125,5 @@ export interface Fund {
   updatedAt: Date;
   userId: string;
   fundTransactions?: FundTransaction[];
+  isFavorite?: boolean;
 }

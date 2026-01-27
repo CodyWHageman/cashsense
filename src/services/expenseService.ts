@@ -39,6 +39,7 @@ const mapExpense = (doc: any): BudgetExpense => {
     createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
     updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : new Date(),
     sequenceNumber: data.sequenceNumber,
+    isFavorite: data.isFavorite || false,
     transactions: [] 
   };
 };

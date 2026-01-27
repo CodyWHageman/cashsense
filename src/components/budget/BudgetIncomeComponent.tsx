@@ -18,7 +18,7 @@ import {
   SxProps, 
   Theme
 } from '@mui/material';
-import { Add, MoreVert, Edit, Delete, ExpandMore, LocalAtmTwoTone } from '@mui/icons-material';
+import { Add, MoreVert, Edit, Delete, ExpandMore, LocalAtmTwoTone, PushPin, PushPinOutlined } from '@mui/icons-material';
 import { BudgetIncome } from '../../models/Budget';
 import { createIncome, updateIncome, deleteIncome } from '../../services/incomeService';
 import { getMonthName } from '../../utils/dateUtils';
@@ -99,6 +99,23 @@ function BudgetIncomeComponent({
     }
   };
 
+  const handleToggleFavorite = async (income: BudgetIncome) => {
+    try {
+        const updatedIncome = { 
+            ...income, 
+            isFavorite: !income.isFavorite,
+            updatedAt: new Date()
+        };
+        // Optimistic update in UI
+        handleIncomeUpdated(updatedIncome);
+        // Persist
+        await updateIncome(income.id, { isFavorite: !income.isFavorite });
+    } catch (error) {
+        console.error('Error toggling favorite:', error);
+        // Revert on error would go here
+    }
+  };
+
   const handleSave = async () => {
     if (!editDialog.income?.name) return;
     if (!currentBudget) return;
@@ -153,7 +170,6 @@ function BudgetIncomeComponent({
     setExpanded(!expanded);
   };
 
-  // Explicitly type the style object to satisfy MUI's SxProps
   const gridLayoutStyles: SxProps<Theme> = {
     display: isSmallScreen ? 'flex' : 'grid',
     flexDirection: isSmallScreen ? 'column' : 'row',
@@ -166,7 +182,6 @@ function BudgetIncomeComponent({
   
   return (
     <Paper className="category-section">
-      {/* HEADER SECTION */}
       <Box sx={{
         ...gridLayoutStyles,
         py: 1, 
@@ -191,7 +206,6 @@ function BudgetIncomeComponent({
           </Typography>
         </Box>
 
-        {/* Hide column headers on mobile */}
         {!isSmallScreen && (
           <>
             <Typography variant="body2" sx={{ textAlign: 'right', color: 'text.secondary' }}>
@@ -221,25 +235,36 @@ function BudgetIncomeComponent({
               }}
               onClick={() => onIncomeClick(income)}
             >
-               {/* CONTENT: Mobile vs Desktop */}
                {isSmallScreen ? (
                  // --- MOBILE CARD LAYOUT ---
                  <Box sx={{ width: '100%' }}>
-                    {/* Row 1: Name & Menu */}
+                    {/* Row 1: Name & Actions */}
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
                         <Typography variant="body1" sx={{ fontWeight: 500 }}>
                           {income.name}
                         </Typography>
-                        <IconButton
-                          size="medium"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenMenu(e, income.id);
-                          }}
-                          sx={{ color: 'text.secondary', mr: -1 }}
-                        >
-                          <MoreVert />
-                        </IconButton>
+                        <Box>
+                            <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleToggleFavorite(income);
+                                }}
+                                sx={{ color: income.isFavorite ? 'primary.main' : 'text.disabled' }}
+                            >
+                                {income.isFavorite ? <PushPin fontSize="small" /> : <PushPinOutlined fontSize="small" />}
+                            </IconButton>
+                            <IconButton
+                                size="medium"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenMenu(e, income.id);
+                                }}
+                                sx={{ color: 'text.secondary', mr: -1 }}
+                            >
+                                <MoreVert />
+                            </IconButton>
+                        </Box>
                     </Box>
 
                     {/* Row 2: Planned */}
@@ -264,9 +289,25 @@ function BudgetIncomeComponent({
                ) : (
                  // --- DESKTOP GRID LAYOUT ---
                  <>
-                    <Typography variant="body2" noWrap>
-                      {income.name}
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <IconButton
+                            size="small"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleFavorite(income);
+                            }}
+                            sx={{ 
+                                color: income.isFavorite ? 'primary.main' : 'text.disabled',
+                                p: 0.5
+                            }}
+                        >
+                            {income.isFavorite ? <PushPin fontSize="small" /> : <PushPinOutlined fontSize="small" />}
+                        </IconButton>
+                        <Typography variant="body2" noWrap>
+                            {income.name}
+                        </Typography>
+                    </Box>
+                    
                     <Typography 
                       variant="body2" 
                       className="MuiTypography-amount" 
