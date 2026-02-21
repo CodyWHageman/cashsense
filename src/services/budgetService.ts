@@ -159,7 +159,7 @@ export const getBudgetByMonthAndYear = async (month: number, year: number, userI
       }
 
       const fetchedCategories = await Promise.all(
-        chunks.map(chunk => getDocs(query(collection(db, 'expense_categories'), where(documentId(), 'in', chunk))))
+        chunks.map(chunk => getDocs(query(collection(db, 'expense_categories'), where(documentId(), 'in', chunk), where('userId', '==', userId))))
       );
       
       fetchedCategories.forEach(snap => {
@@ -188,7 +188,7 @@ export const getBudgetByMonthAndYear = async (month: number, year: number, userI
       }
       
       const results = await Promise.all(
-        chunks.map(chunk => getDocs(query(collection(db, 'transactions'), where(field, 'in', chunk))))
+        chunks.map(chunk => getDocs(query(collection(db, 'transactions'), where(field, 'in', chunk), where('userId', '==', userId))))
       );
 
       results.forEach(snap => {
@@ -236,7 +236,7 @@ export const getBudgetByMonthAndYear = async (month: number, year: number, userI
 
       await Promise.all(
         parentChunks.map(async chunk => {
-          const q = query(collection(db, 'transactions'), where(documentId(), 'in', chunk));
+          const q = query(collection(db, 'transactions'), where(documentId(), 'in', chunk), where('userId', '==', userId));
           const snap = await getDocs(q);
           snap.forEach(d => {
             parentMap[d.id] = mapTransaction(d);
