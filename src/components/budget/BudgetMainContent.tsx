@@ -44,7 +44,7 @@ export function BudgetMainContent({
             display: 'flex',
             flexDirection: 'column',
             width: '100%',
-            overflowX: 'hidden' // FIX: Prevent accidental horizontal scroll at root
+            // overflowX: 'hidden' // FIX: Prevent accidental horizontal scroll at root
         }}>
             <BudgetHeader />
             <MainContent>

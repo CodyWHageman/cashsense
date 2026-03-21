@@ -8,6 +8,7 @@ import Loading from '../common/Loading';
 import { BudgetActions } from '../budget/BudgetActions';
 import { useBudget } from '../../contexts/BudgetContext';
 import { useFund } from '../../contexts/FundContext';
+import ScrollToTopButton from '../common/ScrollToTopButton';
 
 function BudgetPage() {
     const { currentBudget, loading } = useBudget();
@@ -41,13 +42,20 @@ function BudgetPage() {
             display: 'flex', 
             flexDirection: isMobile ? 'column' : 'row',
             position: 'relative',
-            height: '100vh'
+            height: '100vh',
+            overflow: 'hidden' // NEW: Lock the main window from scrolling
         }}>
-            <Box sx={{ 
-                flex: 1,
-                width: '100%',
-                position: 'relative'
-            }}>
+            <Box
+                id="budget-main-scroll-container" 
+                sx={{ 
+                    flex: 1,
+                    width: '100%',
+                    position: 'relative',
+                    height: '100%', // NEW: Take full height of parent
+                    overflowY: 'auto', // NEW: Make THIS the scrollable container
+                    overflowX: 'hidden' // NEW: Moved horizontal protection here safely
+                }}
+            >
                 <BudgetMainContent
                     onIncomeClick={handleIncomeClick}
                     onExpenseClick={handleExpenseClick}
@@ -57,6 +65,7 @@ function BudgetPage() {
                 {currentBudget && (
                     <BudgetActions funds={funds} />
                 )}
+                <ScrollToTopButton targetId="budget-main-scroll-container" />
             </Box>
 
             {currentBudget && (
