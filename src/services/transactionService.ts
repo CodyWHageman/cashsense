@@ -151,20 +151,42 @@ export const updateTransaction = async (id: string, updates: Partial<Transaction
 export const deleteTransaction = async (id: string): Promise<void> => {
   await deleteDoc(doc(db, 'transactions', id));
 };
-
 export const checkExistingHashIds = async (hashIds: string[]): Promise<string[]> => {
+  // 1. Guard clause: Exit early if there's nothing to check
+  if (!hashIds || hashIds.length === 0) return [];
+
+  const userId = auth.currentUser?.uid;
+  if (!userId) {
+    throw new Error("Unauthorized: User must be authenticated to check transactions.");
+  }
+
+  // 2. Chunk the array (Firestore 'in' queries are strictly limited to 30 elements)
   const chunks = [];
   for (let i = 0; i < hashIds.length; i += 30) {
     chunks.push(hashIds.slice(i, i + 30));
   }
   
+  // 3. Map chunks to an array of unresolved Promises
+  const queryPromises = chunks.map(chunk => {
+    const q = query(
+      collection(db, 'transactions'),
+      where('userId', '==', userId), // Fix: Scoped to the current user
+      where('hashId', 'in', chunk)
+    );
+    return getDocs(q);
+  });
+  
+  // 4. Await all network requests concurrently
+  const snapshots = await Promise.all(queryPromises);
+  
   const existingHashes: string[] = [];
   
-  for (const chunk of chunks) {
-    const q = query(collection(db, 'transactions'), where('hashId', 'in', chunk));
-    const snap = await getDocs(q);
-    snap.forEach(d => existingHashes.push(d.data().hashId));
-  }
+  // 5. Flatten the parallel results
+  snapshots.forEach(snap => {
+    snap.forEach(d => {
+      existingHashes.push(d.data().hashId);
+    });
+  });
   
   return existingHashes;
 };
