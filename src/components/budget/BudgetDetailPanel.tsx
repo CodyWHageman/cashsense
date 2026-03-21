@@ -15,11 +15,7 @@ const DesktopPanel = styled(Box)(({ theme }) => ({
   width: '400px',
   height: '100vh',
   borderLeft: `1px solid ${theme.palette.divider}`,
-  overflow: 'auto',
-  position: 'fixed',
-  right: 0,
-  top: 0,
-  zIndex: 1000
+  overflow: 'auto'
 }));
 
 interface BudgetDetailPanelProps {
