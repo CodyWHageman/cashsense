@@ -1,7 +1,7 @@
 - income details needs mobile refresh
 - transactions list delete icon is messed up
 - transaction descriptions in transaction list on side panel needs truncated
-- Need to fix transaction import to not use absolute number, or tell template what to do. Refundsare coming thru as expenses
+- Need to fix transaction import to not use absolute number, or tell template what to do. Refunds are coming thru as expenses
 - Need a solution to help track returns so that expense buckets get cash back in them to spend
 - Add notes to transactions; add button to individual transaction in the import transaction list to add note to it before adding to expense
 	- will also need that in add single transaction manually
