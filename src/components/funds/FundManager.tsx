@@ -14,7 +14,8 @@ import {
   Fab,
   Dialog,
   useTheme,
-  Chip
+  Chip,
+  Badge // <-- Added Badge import
 } from '@mui/material';
 import { Add, Edit, Delete, Savings, Bolt, PushPin, PushPinOutlined } from '@mui/icons-material';
 import { Fund } from '../../models/Budget';
@@ -24,6 +25,7 @@ import FundTransactionDialog from './FundTransactionDialog';
 import FundDetail from './FundDetail';
 import { useFund } from '../../contexts/FundContext';
 import { useResponsive } from '../../hooks/useResponsive';
+import { PendingTransfersDrawer } from './PendingTransfersDrawer'; // <-- Added Drawer import
 
 interface FundManagerProps {
   userId: string;
@@ -59,6 +61,15 @@ export function FundManager({ userId }: FundManagerProps) {
     fundName: ''
   });
   const [selectedFund, setSelectedFund] = useState<FundWithBalance | null>(null);
+  
+  // NEW: State for the Pending Transfers Drawer
+  const [isTransferDrawerOpen, setIsTransferDrawerOpen] = useState(false);
+
+  // NEW: Calculate total pending transfers across all funds for the Badge
+  const pendingTransfersCount = funds.reduce((total, fund) => {
+      const pendingInFund = (fund.fundTransactions || []).filter(ft => !ft.transferComplete).length;
+      return total + pendingInFund;
+  }, 0);
 
   const handleEditFund = (fund?: Fund) => {
     setEditDialog({
@@ -118,8 +129,8 @@ export function FundManager({ userId }: FundManagerProps) {
           bgcolor: isCompleted ? 'success.lighter' : 'background.paper',
           transition: 'transform 0.2s',
           '&:hover': {
-             transform: 'translateY(-2px)',
-             boxShadow: theme.shadows[4]
+              transform: 'translateY(-2px)',
+              boxShadow: theme.shadows[4]
           }
         }}
       >
@@ -164,7 +175,6 @@ export function FundManager({ userId }: FundManagerProps) {
         </CardActionArea>
 
         <CardActions sx={{ borderTop: 1, borderColor: 'divider', justifyContent: 'space-between', px: 2, py: 1 }}>
-          {/* Quick Action: Add Transaction */}
           <Button 
             size="small" 
             startIcon={<Bolt />} 
@@ -204,15 +214,30 @@ export function FundManager({ userId }: FundManagerProps) {
       {/* HEADER */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h5" fontWeight={700}>Savings Funds</Typography>
-        {!isSmallScreen && (
+        
+        {/* NEW: Action buttons container */}
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          
+          <Badge badgeContent={pendingTransfersCount} color="error" invisible={pendingTransfersCount === 0}>
             <Button
-            variant="contained"
-            startIcon={<Add />}
-            onClick={() => setEditDialog({ open: true, fund: {} })}
+                variant="outlined"
+                color="inherit" // Keep it subtle so it doesn't clash with primary actions
+                onClick={() => setIsTransferDrawerOpen(true)}
             >
-            New Fund
+                Pending Transfers
             </Button>
-        )}
+          </Badge>
+
+          {!isSmallScreen && (
+              <Button
+                variant="contained"
+                startIcon={<Add />}
+                onClick={() => setEditDialog({ open: true, fund: {} })}
+              >
+                New Fund
+              </Button>
+          )}
+        </Box>
       </Box>
 
       {/* LIST CONTENT */}
@@ -239,7 +264,7 @@ export function FundManager({ userId }: FundManagerProps) {
         <Fab
           color="primary"
           aria-label="add"
-          sx={{ position: 'fixed', bottom: 80, right: 16, zIndex: 1000 }} // Bottom 80 to clear BottomNav
+          sx={{ position: 'fixed', bottom: 80, right: 16, zIndex: 1000 }}
           onClick={() => setEditDialog({ open: true, fund: {} })}
         >
           <Add />
@@ -286,6 +311,13 @@ export function FundManager({ userId }: FundManagerProps) {
              {selectedFund && <FundDetail fund={selectedFund} />}
         </Dialog>
       )}
+
+      {/* NEW: Pending Transfers Drawer */}
+      <PendingTransfersDrawer
+          open={isTransferDrawerOpen}
+          onClose={() => setIsTransferDrawerOpen(false)}
+          funds={funds}
+      />
     </Box>
   );
 }

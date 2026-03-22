@@ -5,7 +5,6 @@ import {
   Paper, 
   Grid, 
   LinearProgress, 
-  IconButton, 
   Card, 
   CardContent, 
   Stack,
@@ -17,7 +16,8 @@ import {
   TrendingUp, 
   TrendingDown, 
   ArrowForward, 
-  WarningAmber 
+  WarningAmber,
+  SwapHoriz // <-- Added for the transfer icon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -39,7 +39,17 @@ function DashboardPage() {
   const pinnedExpenses = currentBudget?.expenses?.filter(e => e.isFavorite) || [];
   const pinnedIncomes = currentBudget?.incomes?.filter(i => i.isFavorite) || [];
 
-  // --- 2. CALCULATE HEADER STATS ---
+  // --- 2. GATHER PENDING TRANSFERS ---
+  const pendingTransfers = funds.flatMap(fund => 
+      (fund.fundTransactions || [])
+          .filter(ft => !ft.transferComplete)
+          .map(ft => ({
+              ...ft,
+              fundName: fund.name
+          }))
+  );
+
+  // --- 3. CALCULATE HEADER STATS ---
   const leftToBudget = currentBudget ? calculateLeftToBudget(currentBudget) : 0;
   
   const getGreeting = () => {
@@ -56,7 +66,7 @@ function DashboardPage() {
   }
 
   return (
-    <Box sx={{ p: isSmallScreen ? 2 : 4, maxWidth: '1000px', margin: '0 auto', mb: 8 }}>
+    <Box sx={{ p: isSmallScreen ? 2 : 4, maxWidth: '1000px', margin: '0 auto', mb: 8, width: '100%', overflowX: 'hidden' }}>
       
       {/* HEADER SECTION */}
       <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
@@ -80,6 +90,72 @@ function DashboardPage() {
         </Box>
       </Box>
 
+      {/* NEW: PENDING TRANSFERS (Horizontal Scroll) */}
+      {pendingTransfers.length > 0 && (
+        <Box sx={{ mb: 4 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2, alignItems: 'center' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <WarningAmber color="error" fontSize="small" />
+                <Typography variant="h6" fontWeight={700} color="error.main">Action Required</Typography>
+            </Box>
+            <Button size="small" color="error" endIcon={<ArrowForward />} onClick={() => navigate('/funds')}>
+                Resolve
+            </Button>
+          </Box>
+          
+          <Box sx={{ 
+            display: 'flex', 
+            gap: 2, 
+            overflowX: 'auto', 
+            pb: 2, // Slightly increased padding for shadow/border clearance
+            scrollSnapType: 'x mandatory', // Enforces snapping behavior
+            scrollbarWidth: 'none', // Hides scrollbar in Firefox
+            '&::-webkit-scrollbar': { display: 'none' }, // Hides scrollbar in Chrome/Safari/Edge
+            // Ensures the last item doesn't get cut off flush against the right edge
+            '&::after': {
+              content: '""',
+              minWidth: '1px'
+            }
+          }}>
+            {pendingTransfers.map(transfer => (
+                <Paper 
+                  key={transfer.id}
+                  variant="outlined"
+                  sx={{ 
+                    width: { xs: '85%', sm: 280 },
+                    minWidth: { xs: '85%', sm: 280 },
+                    p: 2,
+                    borderRadius: 3,
+                    flexShrink: 0,
+                    scrollSnapAlign: 'start',
+                    bgcolor: 'background.paper',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => navigate('/funds')} 
+                >
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, alignItems: 'flex-start' }}>
+                    <Box sx={{ p: 0.5, borderRadius: 1, bgcolor: 'error.main', color: 'white', display: 'flex' }}>
+                       <SwapHoriz fontSize="small" />
+                    </Box>
+                    <Typography variant="h6" fontWeight={700} color="error.main">
+                        ${transfer.transaction?.amount?.toFixed(2) || '0.00'}
+                    </Typography>
+                  </Box>
+                  <Typography variant="subtitle2" noWrap fontWeight={600} color="error.dark">
+                    {transfer.fundName}
+                  </Typography>
+                  <Typography variant="caption" color="error.main" noWrap sx={{ display: 'block', opacity: 0.8 }}>
+                    {transfer.transaction?.description || 'Pending Transfer'}
+                  </Typography>
+                  <Typography variant="caption" color="error.main" sx={{ display: 'block', mt: 0.5, opacity: 0.7 }}>
+                    {transfer.transaction?.date ? new Date(transfer.transaction.date).toLocaleDateString() : ''}
+                  </Typography>
+                </Paper>
+            ))}
+          </Box>
+        </Box>
+      )}
+
       {/* PINNED FUNDS (Horizontal Scroll) */}
       {pinnedFunds.length > 0 && (
         <Box sx={{ mb: 4 }}>
@@ -94,10 +170,15 @@ function DashboardPage() {
             display: 'flex', 
             gap: 2, 
             overflowX: 'auto', 
-            pb: 1,
-            mx: isSmallScreen ? -2 : 0, // Negative margin to bleed to edge on mobile
-            px: isSmallScreen ? 2 : 0,  // Padding to restore content alignment
-            '::-webkit-scrollbar': { display: 'none' } // Hide scrollbar for cleaner look
+            pb: 2, // Slightly increased padding for shadow/border clearance
+            scrollSnapType: 'x mandatory', // Enforces snapping behavior
+            scrollbarWidth: 'none', // Hides scrollbar in Firefox
+            '&::-webkit-scrollbar': { display: 'none' }, // Hides scrollbar in Chrome/Safari/Edge
+            // Ensures the last item doesn't get cut off flush against the right edge
+            '&::after': {
+              content: '""',
+              minWidth: '1px'
+            }
           }}>
             {pinnedFunds.map(fund => {
               const { balance } = calculateFundBalance(fund);
@@ -108,15 +189,16 @@ function DashboardPage() {
                   key={fund.id}
                   variant="outlined"
                   sx={{ 
-                    minWidth: 200, 
-                    maxWidth: 200,
+                    width: { xs: '85%', sm: 280 },
+                    minWidth: { xs: '85%', sm: 280 },
                     p: 2,
                     borderRadius: 3,
                     flexShrink: 0,
+                    scrollSnapAlign: 'start',
                     bgcolor: 'background.paper',
                     cursor: 'pointer'
                   }}
-                  onClick={() => navigate('/funds')} // Could deep link later
+                  onClick={() => navigate('/funds')} 
                 >
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                     <SavingsTwoTone color="primary" />
@@ -238,7 +320,7 @@ function DashboardPage() {
       )}
 
       {/* EMPTY STATE */}
-      {pinnedFunds.length === 0 && pinnedExpenses.length === 0 && pinnedIncomes.length === 0 && (
+      {pinnedFunds.length === 0 && pinnedExpenses.length === 0 && pinnedIncomes.length === 0 && pendingTransfers.length === 0 && (
           <Paper 
             sx={{ 
                 p: 4, 
