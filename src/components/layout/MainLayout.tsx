@@ -76,6 +76,8 @@ export function MainLayout({ children }: MainLayoutProps) {
         component="main"
         sx={{
           flexGrow: 1,
+          minWidth: 0,
+          overflowX: "hidden",
           minHeight: '100vh',
           pt: isMobile ? 2 : 3,
           pb: isMobile ? 7 : 3,
